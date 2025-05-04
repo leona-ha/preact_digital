@@ -1,5 +1,113 @@
+# ====================
+# macOS system files
+# ====================
+.DS_Store
+
+# ====================
+# Python bytecode
+# ====================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ====================
+# Jupyter Notebook
+# ====================
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# ====================
+# Virtual environments
+# ====================
+venv/
+env/
+ENV/
+.venv/
+.pipenv/
+
+# ====================
+# Packaging
+# ====================
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+sdist/
+develop-eggs/
+.installed.cfg
+*.manifest
+*.spec
+
+# ====================
+# PyInstaller
+# ====================
+*.manifest
+*.spec
+
+# ====================
+# MyPy
+# ====================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ====================
+# Pyre type checker
+# ====================
+.pyre/
+
+# ====================
+# pytest
+# ====================
+.cache/
+.pytest_cache/
+
+# ====================
+# Coverage reports
+# ====================
+htmlcov/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# ====================
+# IPython
+# ====================
+profile_default/
+ipython_config.py
+
+# ====================
+# VSCode settings
+# ====================
+.vscode/
+
+# ====================
+# Other IDEs
+# ====================
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# ====================
+# Logs and local info
+# ====================
+*.log
+*.local
+*.swp
+*.swo
+
+# ====================
+# Data files to ignore
+# ====================
 *.csv
 *.json
 *.7z
-config.py
 *.pkl
+config.py
+
