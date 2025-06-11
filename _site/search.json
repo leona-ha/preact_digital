@@ -1,0 +1,72 @@
+[
+  {
+    "objectID": "documentation.html#design",
+    "href": "documentation.html#design",
+    "title": "TIKI: Feature Database Documentation",
+    "section": "Design",
+    "text": "Design",
+    "crumbs": [
+      "TIKI Features Documentation"
+    ]
+  },
+  {
+    "objectID": "documentation.html#methods",
+    "href": "documentation.html#methods",
+    "title": "TIKI: Feature Database Documentation",
+    "section": "Methods",
+    "text": "Methods",
+    "crumbs": [
+      "TIKI Features Documentation"
+    ]
+  },
+  {
+    "objectID": "documentation.html#ema-data",
+    "href": "documentation.html#ema-data",
+    "title": "TIKI: Feature Database Documentation",
+    "section": "EMA Data",
+    "text": "EMA Data",
+    "crumbs": [
+      "TIKI Features Documentation"
+    ]
+  },
+  {
+    "objectID": "documentation.html#passive-sensor-data",
+    "href": "documentation.html#passive-sensor-data",
+    "title": "TIKI: Feature Database Documentation",
+    "section": "Passive Sensor Data",
+    "text": "Passive Sensor Data\n\nActivity\n\n\nHeartrate\n\n\nSleep\n\n\nGPS",
+    "crumbs": [
+      "TIKI Features Documentation"
+    ]
+  },
+  {
+    "objectID": "documentation.html#ecg-data",
+    "href": "documentation.html#ecg-data",
+    "title": "TIKI: Feature Database Documentation",
+    "section": "ECG Data",
+    "text": "ECG Data",
+    "crumbs": [
+      "TIKI Features Documentation"
+    ]
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "About",
+    "section": "",
+    "text": "About this site",
+    "crumbs": [
+      "About"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "my-site",
+    "section": "",
+    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites.",
+    "crumbs": [
+      "Home"
+    ]
+  }
+]

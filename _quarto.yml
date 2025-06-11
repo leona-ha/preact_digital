@@ -1,0 +1,31 @@
+project:
+  type: website
+  output-dir: docs
+
+website:
+  title: "FOR5187 | PREACT"
+  #logo: "images/tiki.png"  # Make sure this path is correct
+  navbar:
+    left: []  # explicitly empty
+
+  sidebar:
+    style: "docked"
+    collapse-level: 1
+    contents:
+      - href: index.qmd
+        text: Home
+      - href: documentation.ipynb
+        text: TIKI Features Documentation
+      - href: about.qmd
+        text: About
+
+format:
+  html:
+    theme:
+      - cosmo
+      - brand
+    css: styles.css
+    toc: true
+    # number-sections: true
+
+
