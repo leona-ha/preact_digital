@@ -26,7 +26,7 @@ def main():
 
     # 2. Import config dynamically
     try:
-        config_module = importlib.import_module(f'ML_Config')  # Adjust if config is in a subfolder
+        config_module = importlib.import_module('ML_config')
     except ImportError:
         print(f"Error: Could not import config module 'ML_Config'")
         sys.exit(1)
@@ -34,7 +34,7 @@ def main():
     cfg_path = os.path.abspath(sys.modules[cfg.__module__].__file__)
 
     # 3. Set output directory based on config path
-    OUTPUT_DIR = cfg_path.replace('ML_Config.py', 'results')
+    OUTPUT_DIR = cfg_path.replace('ML_config.py', 'results')
     if runDEBUG:
         print("=" * 40 + "\nRunning DEBUG MODE\n" + "=" * 40)
         cfg.N_INNER_CV = 2
