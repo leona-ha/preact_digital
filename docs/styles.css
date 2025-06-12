@@ -1,1 +1,26 @@
 /* css styles */
+
+/* Change background color of the header */
+.navbar {
+    background-color: #778da9; /* Replace with your desired color */
+  }
+
+/* Optional: Change text color in the navbar */
+.navbar a,
+.navbar-brand {
+  color: #e0e1dd !important; /* Makes text white for contrast */
+}
+
+/* Headline colors */
+  h2 {
+    color: #415a77; 
+  }
+  
+  h3 {
+    color: #415a77; 
+  }
+
+/* color inspiration: https://coolors.co/palettes/trending */
+
+/* nice: #15616d
+         #7c6a0a

@@ -2,7 +2,7 @@
   {
     "objectID": "documentation.html#design",
     "href": "documentation.html#design",
-    "title": "TIKI: Feature Database Documentation",
+    "title": "Preact Digital: Feature Database Documentation",
     "section": "Design",
     "text": "Design",
     "crumbs": [
@@ -12,7 +12,7 @@
   {
     "objectID": "documentation.html#methods",
     "href": "documentation.html#methods",
-    "title": "TIKI: Feature Database Documentation",
+    "title": "Preact Digital: Feature Database Documentation",
     "section": "Methods",
     "text": "Methods",
     "crumbs": [
@@ -22,9 +22,9 @@
   {
     "objectID": "documentation.html#ema-data",
     "href": "documentation.html#ema-data",
-    "title": "TIKI: Feature Database Documentation",
+    "title": "Preact Digital: Feature Database Documentation",
     "section": "EMA Data",
-    "text": "EMA Data",
+    "text": "EMA Data\n\nIntroduction\nThis section outlines the eight EMA constructs and provides an item-level overview.\n\nThe EMA measurement includes the following constructs:\n\nAffect\nEmotion regulation\nSituational context\nSocial context\nSignificant events\nTherapeutic agency\nPhysical fitness\nECG control\n\n\nAffect\n\nDescription: At each beep, participants were asked about their current affective state\nConstruct: PANAS-X subscales Haney et al. (2023)\n17 Items\n\n\n\nShow Items\n\n\n\n\n\n\n\n\n\n\n\n\nVariable\nItem\nScale\nScale Endpoints\nMeasurement Time\n\n\n\n\n\nHow … do you feel right now?\n\n\n\n\n\nanxious\nanxious\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nnervous\nnervous\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nattentive\nattentive\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nrelaxed\nrelaxed\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\ncalm\ncalm\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nirritable\nirritable\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nangry\nangry\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nfatigue\nfatigue\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\ncheerful\ncheerful\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nhappy\nhappy\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nashamed\nashamed\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\ndissatisfied_myself\ndissatisfied with myself\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nself_confident\nself-confident\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nshy\nshy\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\ndowncast\ndowncast\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nsad\nsad\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps\n\n\nlonely\nlonely\n1-2-3-4-5-6-7\nnot at all - very much\nall beeps",
     "crumbs": [
       "TIKI Features Documentation"
     ]
@@ -32,7 +32,7 @@
   {
     "objectID": "documentation.html#passive-sensor-data",
     "href": "documentation.html#passive-sensor-data",
-    "title": "TIKI: Feature Database Documentation",
+    "title": "Preact Digital: Feature Database Documentation",
     "section": "Passive Sensor Data",
     "text": "Passive Sensor Data\n\nActivity\n\n\nHeartrate\n\n\nSleep\n\n\nGPS",
     "crumbs": [
@@ -42,21 +42,11 @@
   {
     "objectID": "documentation.html#ecg-data",
     "href": "documentation.html#ecg-data",
-    "title": "TIKI: Feature Database Documentation",
+    "title": "Preact Digital: Feature Database Documentation",
     "section": "ECG Data",
     "text": "ECG Data",
     "crumbs": [
       "TIKI Features Documentation"
-    ]
-  },
-  {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "my-site",
-    "section": "",
-    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites.",
-    "crumbs": [
-      "Home"
     ]
   },
   {
@@ -67,6 +57,16 @@
     "text": "About this site",
     "crumbs": [
       "About"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "my-site",
+    "section": "",
+    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites.",
+    "crumbs": [
+      "Home"
     ]
   }
 ]
