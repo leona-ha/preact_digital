@@ -239,8 +239,8 @@ ul.task-list li input[type="checkbox"] {
 <li><a href="#affect">Affect</a></li>
 <li><a href="#emotion-regulation">Emotion regulation</a></li>
 <li><a href="#situational-context">Situational context</a></li>
-<li><a href="#social-context">Social context</a></li>
 <li><a href="#significant-events">Significant events</a></li>
+<li><a href="#social-context">Social context</a></li>
 <li><a href="#therapeutic-agency">Therapeutic agency</a></li>
 <li><a href="#physical-fitness">Physical fitness</a></li>
 <li><a href="#ecg-control">ECG control</a></li>
@@ -429,7 +429,7 @@ ul.task-list li input[type="checkbox"] {
 </colgroup>
 <thead>
 <tr class="header">
-<th>Emotion Regulation</th>
+<th>Variable</th>
 <th>Item</th>
 <th>Scale</th>
 <th>Scale Endpoints</th>
@@ -531,7 +531,7 @@ ul.task-list li input[type="checkbox"] {
 <h4 class="anchored" data-anchor-id="situational-context">Situational Context</h4>
 <ul>
 <li><p>Description: At each beep, participants were asked to specify activities they had pursued in the preceding 2 hours from a given set of 9 common activities. Participants were able to select multiple options simultaneously. Subsequently, they were asked to evaluate how much they enjoyed the respective activities</p></li>
-<li><p>Construct: self-constructed, based on DIAMONDS scale <a href="https://doi.org/10.1027/1015-5759/a000245">Rauthmann &amp; Sherman (2016)</a> and WARN-D study protocol <a href="https://osf.io/preprints/psyarxiv/9qcvs_v1">Fried et al.&nbsp;(2022)</a></p></li>
+<li><p>Construct: Self-constructed, based on the DIAMONDS scale <a href="https://doi.org/10.1027/1015-5759/a000245">Rauthmann &amp; Sherman (2016)</a> and the WARN-D study protocol <a href="https://osf.io/preprints/psyarxiv/9qcvs_v1">Fried et al.&nbsp;(2022)</a>, a similar longitudinal digital phenotyping study. We aimed to find a balance between sparsity of items and high degree of situational coverage.</p></li>
 <li><p>2 Items</p></li>
 </ul>
 <details>
@@ -541,27 +541,106 @@ ul.task-list li input[type="checkbox"] {
 <div style="max-width: 800px; font-size: 14px;">
 <table class="table-striped table-hover caption-top table">
 <colgroup>
-<col style="width: 21%">
-<col style="width: 48%">
-<col style="width: 30%">
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 27%">
+<col style="width: 31%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Variable</th>
 <th>Item</th>
+<th>Scale</th>
+<th>Scale Endpoints</th>
 <th>Measurement Time</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td></td>
-<td>How did you spent the time since the last beep? <br> (Multiple answers possible)</td>
+<td>How did you spent the time since the last beep [since waking up]? <br> (Multiple answers possible)</td>
+<td></td>
+<td></td>
 <td></td>
 </tr>
 <tr class="even">
 <td><code>situation_1</code></td>
 <td>[ ] Work or study <br> [ ] Housework or errands <br> [ ] Caring for children/relatives <br> [ ] Eating/drinking/personal hygiene <br> [ ] On the move (e.g., in the subway) <br> [ ] Smartphone/social media <br> [ ] Leisure activity, rather passive (e.g., watching a movie, reading) <br> [ ] Leisure activity, rather active (e.g., sports, outings) <br> [ ] Something else</td>
-<td>all beeps</td>
+<td></td>
+<td></td>
+<td>all beeps (except the first of the day)</td>
+</tr>
+<tr class="odd">
+<td><code>situation_1_morning</code></td>
+<td>cf.&nbsp;above</td>
+<td></td>
+<td></td>
+<td>first beep of the day</td>
+</tr>
+<tr class="even">
+<td><code>situation_2</code></td>
+<td>How much did you enjoy this activity?</td>
+<td>-2, -1, 0, 1, 2</td>
+<td>not at all - very much</td>
+<td>all beeps (except the first of the day)</td>
+</tr>
+<tr class="odd">
+<td><code>situation_2_morning</code></td>
+<td>cf.&nbsp;above</td>
+<td>-2, -1, 0, 1, 2</td>
+<td>not at all - very much</td>
+<td>first beep of the day</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
+</section>
+<section id="significant-events" class="level4">
+<h4 class="anchored" data-anchor-id="significant-events">Significant Events</h4>
+<ul>
+<li><p>Description: Participants were asked to think about the most important event since the last beep and how pleasant they perceived it</p></li>
+<li><p>Construct: Self-constructed</p></li>
+<li><p>1 Items</p></li>
+</ul>
+<details>
+<summary>
+<strong>Show Items</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="table-striped table-hover caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 27%">
+<col style="width: 31%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable</th>
+<th>Item</th>
+<th>Scale</th>
+<th>Scale Endpoints</th>
+<th>Measurement Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>event_general</code></td>
+<td>Think of the most significant moment (situation/experience) since the last survey. How did you perceive it?</td>
+<td>-2, -1, 0, 1, 2</td>
+<td>very unpleasant - very pleasant</td>
+<td>all beeps (except the first of the day)</td>
+</tr>
+<tr class="even">
+<td><code>event_general_morning</code></td>
+<td>Think of the most significant moment (situation/experience) since waking up. How did you perceive it?</td>
+<td>-2, -1, 0, 1, 2</td>
+<td>very unpleasant - very pleasant</td>
+<td>first beep of the day</td>
 </tr>
 </tbody>
 </table>
@@ -572,18 +651,223 @@ ul.task-list li input[type="checkbox"] {
 <section id="social-context" class="level4">
 <h4 class="anchored" data-anchor-id="social-context">Social context</h4>
 <ul>
-<li><p>Description: At each beep, participants were asked to specify activities they had pursued in the preceding 2 hours from a given set of 9 common activities. Participants were able to select multiple options simultaneously. Subsequently, they were asked to evaluate how much they enjoyed the respective activities</p></li>
-<li><p>Construct: self-constructed, based on DIAMONDS scale <a href="https://doi.org/10.1027/1015-5759/a000245">Rauthmann &amp; Sherman (2016)</a> and WARN-D study protocol <a href="https://osf.io/preprints/psyarxiv/9qcvs_v1">Fried et al.&nbsp;(2022)</a></p></li>
+<li><p>Description: Participants were asked if they had social contacts since the last beep, how (online/ in person/ phone) and how agreeable the contact was.</p></li>
+<li><p>Self-constructed</p></li>
 <li><p>3 Items</p></li>
 </ul>
+<details>
+<summary>
+<strong>Show Items</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="table-striped table-hover caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 27%">
+<col style="width: 31%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable</th>
+<th>Item</th>
+<th>Scale</th>
+<th>Scale Endpoints</th>
+<th>Measurement Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>event_social_1</code></td>
+<td>Have you had social contacts since the last survey?</td>
+<td>binary: <br> yes/no</td>
+<td></td>
+<td>all beeps (except the first of the day)</td>
+</tr>
+<tr class="even">
+<td><code>event_social_1_morning</code></td>
+<td>Have you had social contacts since waking up?</td>
+<td>binary: <br> yes/no</td>
+<td></td>
+<td>first beep of the day</td>
+</tr>
+<tr class="odd">
+<td><code>event_social_2</code></td>
+<td>How did the social contact take place?</td>
+<td>multiple choice: <br> [ ] online <br> [ ] by phone <br> [ ] in person</td>
+<td></td>
+<td>all beeps</td>
+</tr>
+<tr class="even">
+<td><code>event_social_3</code></td>
+<td>How did you experience the social contacts?</td>
+<td>-2, -1, 0, 1, 2</td>
+<td>very unpleasant - very pleasant</td>
+<td>all beeps</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
 </section>
-<section id="significant-events" class="level4">
-<h4 class="anchored" data-anchor-id="significant-events">Significant Events</h4>
+<section id="therapeutic-agency" class="level4">
+<h4 class="anchored" data-anchor-id="therapeutic-agency">Therapeutic Agency (TA)</h4>
 <ul>
-<li><p>Description: At each beep, participants were asked to specify activities they had pursued in the preceding 2 hours from a given set of 9 common activities. Participants were able to select multiple options simultaneously. Subsequently, they were asked to evaluate how much they enjoyed the respective activities</p></li>
-<li><p>Construct: self-constructed, based on DIAMONDS scale <a href="https://doi.org/10.1027/1015-5759/a000245">Rauthmann &amp; Sherman (2016)</a> and WARN-D study protocol <a href="https://osf.io/preprints/psyarxiv/9qcvs_v1">Fried et al.&nbsp;(2022)</a></p></li>
-<li><p>1 Items</p></li>
+<li><p>Description: Participants were asked about Therapeutic Agency (TA) in everyday life</p></li>
+<li><p>Construct: Self-constructed based on the Therapeutic Agency Inventory (TAI) <a href="https://pubmed.ncbi.nlm.nih.gov/29557306/">Huber et al.&nbsp;(2019)</a>. The original TAI contains 3 subscales, covering in-session activities, passivity towards the therapist and out-of-session activities. As we were interested in assessing therapeutic agency in everyday life, our TAI-EMA items are based on the “out-of-session activities” subscales and cover cognitive and behavioral aspects of TA</p></li>
+<li><p>4 Items</p></li>
 </ul>
+<details>
+<summary>
+<strong>Show Items</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="table-striped table-hover caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 27%">
+<col style="width: 31%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable</th>
+<th>Item</th>
+<th>Scale</th>
+<th>Scale Endpoints</th>
+<th>Measurement Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td></td>
+<td>Prompted by my therapy today, I have … / Today I have …</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td><code>ta_behavioral_1</code></td>
+<td>… implemented ideas or tasks from therapy</td>
+<td>1-2-3-4-5-6-7</td>
+<td>not at all - very much</td>
+<td>1x/day, 8th beep</td>
+</tr>
+<tr class="odd">
+<td><code>ta_behavioral_2</code></td>
+<td>… tried to think differently about things</td>
+<td>1-2-3-4-5-6-7</td>
+<td>not at all - very much</td>
+<td>1x/day, 8th beep</td>
+</tr>
+<tr class="even">
+<td><code>ta_cognitive_1</code></td>
+<td>… thought about something that was discussed in therapy</td>
+<td>1-2-3-4-5-6-7</td>
+<td>not at all - very much</td>
+<td>1x/day, 8th beep</td>
+</tr>
+<tr class="odd">
+<td><code>ta_cognitive_2</code></td>
+<td>… done something to improve my situation</td>
+<td>1-2-3-4-5-6-7</td>
+<td>not at all - very much</td>
+<td>1x/day, 8th beep</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
+</section>
+<section id="physical-fitness" class="level4">
+<h4 class="anchored" data-anchor-id="physical-fitness">Physical Fitness</h4>
+<ul>
+<li><p>Description: Participants were asked how physically healthy they had felt today on the last beep of the day</p></li>
+<li><p>Construct: Self-constructed</p></li>
+<li><p>1 Item</p></li>
+</ul>
+<details>
+<summary>
+<strong>Show Items</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="table-striped table-hover caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 27%">
+<col style="width: 31%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable</th>
+<th>Item</th>
+<th>Scale</th>
+<th>Scale Endpoints</th>
+<th>Measurement Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>physical_health</code></td>
+<td>How physically healthy did you feel today?</td>
+<td>-2, -1, 0, 1, 2</td>
+<td>worse than usual / normal / better than usual</td>
+<td>1x/day, 8th beep</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
+</section>
+<section id="ecg-control" class="level4">
+<h4 class="anchored" data-anchor-id="ecg-control">ECG Control</h4>
+<ul>
+<li><p>Description: During measurement bursts, patients were asked twice per day to conduct a resting-state ECG on their Scanwatch. To control for potential confounders influencing the signal, we asked if they had consumed nicotine, caffeine or alcohol or had a heavy meal in the last 30 minutes</p></li>
+<li><p>Construct: Self-constructed</p></li>
+<li><p>1 Item</p></li>
+</ul>
+<details>
+<summary>
+<strong>Show Items</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="table-striped table-hover caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 27%">
+<col style="width: 31%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable</th>
+<th>Item</th>
+<th>Scale</th>
+<th>Scale Endpoints</th>
+<th>Measurement Time</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ecg_control</code></td>
+<td>Within the last 30 minutes, did you … <br> - drink coffee or alcohol? <br> - smoke? <br> - eat a heavy meal?</td>
+<td>binary: <br> yes/no</td>
+<td></td>
+<td>2x/day, 1th and 5th beep</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
 </section>
 </section>
 </section>
