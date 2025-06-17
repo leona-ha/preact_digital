@@ -7,6 +7,7 @@ website:
   #logo: "images/tiki.png"  # Make sure this path is correct
   navbar:
     left: []  # explicitly empty
+    pinned: true
 
   sidebar:
     style: "docked"
