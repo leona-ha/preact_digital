@@ -176,11 +176,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
    
   <ul>
   <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a></li>
-  <li><a href="#design" id="toc-design" class="nav-link" data-scroll-target="#design">Design</a></li>
+  <li><a href="#design" id="toc-design" class="nav-link" data-scroll-target="#design">Design</a>
+  <ul class="collapse">
+  <li><a href="#data-structure" id="toc-data-structure" class="nav-link" data-scroll-target="#data-structure">Data Structure</a></li>
+  </ul></li>
   <li><a href="#ema-data" id="toc-ema-data" class="nav-link" data-scroll-target="#ema-data">EMA Data</a>
   <ul class="collapse">
   <li><a href="#introduction-1" id="toc-introduction-1" class="nav-link" data-scroll-target="#introduction-1">Introduction</a></li>
-  <li><a href="#data-structure" id="toc-data-structure" class="nav-link" data-scroll-target="#data-structure">Data Structure</a></li>
   <li><a href="#methods-hierarchical-data-structure" id="toc-methods-hierarchical-data-structure" class="nav-link" data-scroll-target="#methods-hierarchical-data-structure">Methods: Hierarchical Data Structure</a></li>
   <li><a href="#emaconstructs" id="toc-emaconstructs" class="nav-link" data-scroll-target="#emaconstructs">EMA constructs and item-level overview</a></li>
   </ul></li>
@@ -236,22 +238,41 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="design" class="level2">
 <h2 class="anchored" data-anchor-id="design">Design</h2>
+<div class="callout callout-style-default callout-tip callout-titled" title="Glossary">
+<div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="true" aria-label="Toggle callout">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Glossary
+</div>
+<div class="callout-btn-toggle d-inline-block border-0 py-1 ps-1 pe-0 float-end"><i class="callout-toggle"></i></div>
+</div>
+<div id="callout-1" class="callout-1-contents callout-collapse collapse show">
+<div class="callout-body-container callout-body">
+<p>beep = xxxx</p>
+<p>measurement burst = xxxx</p>
+</div>
+</div>
+</div>
+<section id="data-structure" class="level3">
+<h3 class="anchored" data-anchor-id="data-structure">Data Structure</h3>
+<p><strong>Folder Structure</strong><br>
+[insert folder/file tree]</p>
+</section>
 </section>
 <section id="ema-data" class="level2">
 <h2 class="anchored" data-anchor-id="ema-data">EMA Data</h2>
 <section id="introduction-1" class="level3">
 <h3 class="anchored" data-anchor-id="introduction-1">Introduction</h3>
 <p>This section outlines the eight <a href="#emaconstructs">EMA constructs</a> and provides an item-level overview.</p>
-</section>
-<section id="data-structure" class="level3">
-<h3 class="anchored" data-anchor-id="data-structure">Data Structure</h3>
 <p><strong>Files:</strong></p>
 <ul>
 <li><code>ema_content.pkl</code>: binary file format storing the ema relevant for analyses</li>
 <li><code>ema_meta.pkl</code>: xxx</li>
 </ul>
 <p><strong>Load the .pkl file:</strong></p>
-<div id="cell-7" class="cell">
+<div id="cell-9" class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># load the .pkl file</span></span>
@@ -268,8 +289,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <col style="width: 20%">
 <col style="width: 20%">
 <col style="width: 17%">
-<col style="width: 20%">
-<col style="width: 11%">
+<col style="width: 17%">
+<col style="width: 14%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -278,14 +299,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <th>Description</th>
 <th>Data type</th>
 <th>Scale level</th>
-<th>Scale</th>
+<th>Variable Level</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td>1</td>
 <td><code>id</code></td>
-<td>unique identifier wearable and ema data within subproject 6 (SP6)</td>
+<td>Unique identifier wearable and ema data within subproject 6 (SP6)</td>
 <td><code>str</code></td>
 <td></td>
 <td></td>
@@ -293,7 +314,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td>2</td>
 <td><code>for_id</code></td>
-<td>unique identifier across all PREACT subprojects and redcap</td>
+<td>Unique identifier across all PREACT subprojects and redcap</td>
 <td><code>str</code></td>
 <td></td>
 <td></td>
@@ -303,7 +324,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>timestamp_item_completion</code></td>
 <td>Timestamp at which a single item was completed</td>
 <td><code>datetime64</code></td>
-<td></td>
+<td>interval</td>
 <td></td>
 </tr>
 <tr class="even">
@@ -311,7 +332,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>timestamp_beep_completion</code></td>
 <td></td>
 <td><code>datetime64</code></td>
-<td></td>
+<td>interval</td>
 <td></td>
 </tr>
 <tr class="odd">
@@ -319,40 +340,96 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>timestamp_beep_expiration</code></td>
 <td></td>
 <td><code>datetime64</code></td>
-<td></td>
+<td>interval</td>
 <td></td>
 </tr>
 <tr class="even">
 <td>6</td>
 <td><code>measurment_burst</code></td>
-<td>measurement burst: <br> 0 = T0 <br> 1 = T20 <br> 2 = TPost</td>
+<td>Measurement burst describes the measurement point in the longitudinal study (Baseline (T0), after 20 therapy sessions (T20), or after therapy end respectively 365 days after therapy start (TPost)</td>
 <td><code>int</code></td>
 <td>ordinal</td>
-<td></td>
+<td>0 = T0 <br> 1 = T20 <br> 2 = TPost</td>
 </tr>
 <tr class="odd">
 <td>7</td>
 <td><code>schedule_chronotype</code></td>
-<td>Depending on their individual sleep-wake rhythm participants can choose to receive beeps between 07:30 and 21:30 or 09:30 and 22:30 -&gt; T0: 24 (lerche), 25 (eule); T20: 33 (lerche), 34 (eule); TPost: 38 (lerche), 39 (eule)</td>
+<td>Depending on their individual sleep-wake rhythm participants can choose to receive beeps between 07:30 and 21:30 (lark) or 09:30 and 22:30 (owl)</td>
 <td><code>int</code></td>
 <td>nominal</td>
-<td></td>
+<td>24 = T0 lark <br> 25 = T0 owl <br> 33 = T20 lark <br> 34 = T20 owl <br> 38 = TPost lark <br> 39 = TPost owl</td>
 </tr>
 <tr class="even">
 <td>8</td>
 <td><code>response</code></td>
-<td>chosen response by participant</td>
+<td>Chosen response by participant</td>
 <td><code>int</code></td>
-<td>ordinal</td>
-<td>1-2-3-4-5-6-7</td>
+<td>ordinal, nominal, binary</td>
+<td></td>
 </tr>
 <tr class="odd">
 <td>9</td>
 <td><code>item</code></td>
-<td>question/item title</td>
+<td>Question/item title</td>
 <td><code>str</code></td>
 <td></td>
 <td></td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td><code>beep_per_person_id</code></td>
+<td>Unique beep identifier. Date and number of beep per customer</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td><code>date</code></td>
+<td>Date on which the question was generated</td>
+<td><code>datetime64</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td><code>study_version</code></td>
+<td>Numerical coding of study version: the long version covers the whole</td>
+<td><code>str</code></td>
+<td></td>
+<td>long <br> short</td>
+</tr>
+<tr class="odd">
+<td>13</td>
+<td><code>ema_burst_start</code></td>
+<td>Absolute start EMA measurement burst (i.e.&nbsp;intended start according to study protocol)</td>
+<td><code>datetime64</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>14</td>
+<td><code>ema_burst_end</code></td>
+<td>Absolute end EMA measurement burst (i.e.&nbsp;intended end according to study protocol)</td>
+<td><code>datetime64</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>15</td>
+<td><code>season</code></td>
+<td>Describes the four seasons</td>
+<td><code>str</code></td>
+<td>nominal</td>
+<td>1 = Spring <br> 2 = Summer <br> 3 = Fall <br> 4 = Winter</td>
+</tr>
+<tr class="even">
+<td>16</td>
+<td><code>time_of_day</code></td>
+<td>Time of day stratified into five categories (Early Morning = xx)</td>
+<td><code>str</code></td>
+<td>nominal</td>
+<td>1 = Early Morning <br> 2 = Morning <br> 3 = Fall <br> 4 = Winter</td>
 </tr>
 </tbody>
 </table>
