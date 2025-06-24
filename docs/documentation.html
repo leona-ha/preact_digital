@@ -10,7 +10,7 @@
 <meta name="author" content="Tessa Meyer">
 <meta name="dcterms.date" content="2025-03-03">
 
-<title>Preact Digital: Feature Database Documentation – FOR5187 | PREACT</title>
+<title>PREACT-digital: Feature Database Documentation – FOR5187 | PREACT</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -135,7 +135,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./documentation.html">TIKI Features Documentation</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./documentation.html">Feature Database Documentation</a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -155,10 +155,45 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./documentation.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text">TIKI Features Documentation</span></a>
+  <a href="./quick_overview.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Quick overview</span></a>
   </div>
 </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./documentation.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Feature Database Documentation</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false">
+ <span class="menu-text">Pipelines preprocessing</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./EMA preprocessing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">EMA preprocessing</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./Passive preprocessing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Passive preprocessing</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ECG preprocessing.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ECG preprocessing</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./about.html" class="sidebar-item-text sidebar-link">
@@ -178,22 +213,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a></li>
   <li><a href="#design" id="toc-design" class="nav-link" data-scroll-target="#design">Design</a>
   <ul class="collapse">
-  <li><a href="#data-structure" id="toc-data-structure" class="nav-link" data-scroll-target="#data-structure">Data Structure</a></li>
+  <li><a href="#longitudinal-study-design-preact-digital" id="toc-longitudinal-study-design-preact-digital" class="nav-link" data-scroll-target="#longitudinal-study-design-preact-digital">Longitudinal study design (PREACT-digital)</a></li>
   </ul></li>
+  <li><a href="#data-structure" id="toc-data-structure" class="nav-link" data-scroll-target="#data-structure">Data Structure</a></li>
   <li><a href="#ema-data" id="toc-ema-data" class="nav-link" data-scroll-target="#ema-data">EMA Data</a>
   <ul class="collapse">
-  <li><a href="#introduction-1" id="toc-introduction-1" class="nav-link" data-scroll-target="#introduction-1">Introduction</a></li>
+  <li><a href="#data-sets" id="toc-data-sets" class="nav-link" data-scroll-target="#data-sets">Data sets</a></li>
   <li><a href="#methods-hierarchical-data-structure" id="toc-methods-hierarchical-data-structure" class="nav-link" data-scroll-target="#methods-hierarchical-data-structure">Methods: Hierarchical Data Structure</a></li>
   <li><a href="#emaconstructs" id="toc-emaconstructs" class="nav-link" data-scroll-target="#emaconstructs">EMA constructs and item-level overview</a></li>
   </ul></li>
   <li><a href="#passive-sensor-data" id="toc-passive-sensor-data" class="nav-link" data-scroll-target="#passive-sensor-data">Passive Sensor Data</a>
   <ul class="collapse">
-  <li><a href="#activity" id="toc-activity" class="nav-link" data-scroll-target="#activity">Activity</a></li>
-  <li><a href="#heartrate" id="toc-heartrate" class="nav-link" data-scroll-target="#heartrate">Heartrate</a></li>
-  <li><a href="#sleep" id="toc-sleep" class="nav-link" data-scroll-target="#sleep">Sleep</a></li>
-  <li><a href="#gps" id="toc-gps" class="nav-link" data-scroll-target="#gps">GPS</a></li>
+  <li><a href="#data-sets-1" id="toc-data-sets-1" class="nav-link" data-scroll-target="#data-sets-1">Data sets</a></li>
   </ul></li>
-  <li><a href="#ecg-data" id="toc-ecg-data" class="nav-link" data-scroll-target="#ecg-data">ECG Data</a></li>
+  <li><a href="#ecg-data" id="toc-ecg-data" class="nav-link" data-scroll-target="#ecg-data">ECG Data</a>
+  <ul class="collapse">
+  <li><a href="#data-sets-2" id="toc-data-sets-2" class="nav-link" data-scroll-target="#data-sets-2">Data sets</a></li>
+  </ul></li>
   </ul>
 <div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="documentation.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
     </div>
@@ -202,7 +238,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Preact Digital: Feature Database Documentation</h1>
+<h1 class="title">PREACT-digital: Feature Database Documentation</h1>
 </div>
 
 
@@ -234,10 +270,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
-<p>Study protocol link</p>
+<p>Welcome to the documentation for the PREACT-digital study (<a href="https://doi.org/10.1101/2025.03.14.25323957">study protocol</a>).</p>
 </section>
 <section id="design" class="level2">
 <h2 class="anchored" data-anchor-id="design">Design</h2>
+<section id="longitudinal-study-design-preact-digital" class="level3">
+<h3 class="anchored" data-anchor-id="longitudinal-study-design-preact-digital">Longitudinal study design (PREACT-digital)</h3>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/preact-digital_study-procedure.png" class="img-fluid figure-img" width="600"></p>
+<figcaption>Caption describing the figure</figcaption>
+</figure>
+</div>
+<hr>
 <div class="callout callout-style-default callout-tip callout-titled" title="Glossary">
 <div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="true" aria-label="Toggle callout">
 <div class="callout-icon-container">
@@ -250,38 +295,61 @@ Glossary
 </div>
 <div id="callout-1" class="callout-1-contents callout-collapse collapse show">
 <div class="callout-body-container callout-body">
-<p>beep = xxxx</p>
-<p>measurement burst = xxxx</p>
+<ul>
+<li><p><strong>beep</strong> =</p></li>
+<li><p><strong>measurement burst</strong> =</p></li>
+<li><p>…</p></li>
+</ul>
 </div>
 </div>
 </div>
-<section id="data-structure" class="level3">
-<h3 class="anchored" data-anchor-id="data-structure">Data Structure</h3>
-<p><strong>Folder Structure</strong><br>
-[insert folder/file tree]</p>
 </section>
+</section>
+<section id="data-structure" class="level2">
+<h2 class="anchored" data-anchor-id="data-structure">Data Structure</h2>
+<p><strong>Folder Structure on High Performance Cluster (HPC)</strong> [wip]</p>
+<div id="cell-7" class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>SP6<span class="op">/</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">|-</span> processed<span class="op">/</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">|-</span> passive<span class="op">/</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>            <span class="op">|-</span> epoch                        <span class="co"># not aggregated; most finegrained resolution</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> activity_epoch</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> heart_rate_epoch</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ecg_epoch</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> gps_epoch</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>            <span class="op">|-</span> daily                        <span class="co"># daily aggregates</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> activity_daily</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> heart_rate_daily</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ecg_daily</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> gps_daily</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">|-</span> ema</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ema_beep                 <span class="co"># not aggregated; most finegrained resolution   </span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ema_daily                <span class="co"># daily aggregate</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ema_burst                <span class="co"># burst aggregate</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ema_meta                 <span class="co"># technical meta data</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>        <span class="op">|-</span> ecg</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ecg_raw                  <span class="co"># raw data (sampling rate: 300 Hz; 9000 data points/30sec)</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> ecg_processed            <span class="co"># processed, e.g. heart rate variability (hrv) </span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>        <span class="op">|-</span> meta</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>                <span class="op">|-</span> monitoring               <span class="co"># study monitoring</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
 </section>
 <section id="ema-data" class="level2">
 <h2 class="anchored" data-anchor-id="ema-data">EMA Data</h2>
-<section id="introduction-1" class="level3">
-<h3 class="anchored" data-anchor-id="introduction-1">Introduction</h3>
-<p>This section outlines the eight <a href="#emaconstructs">EMA constructs</a> and provides an item-level overview.</p>
-<p><strong>Files:</strong></p>
+<p>This section outlines the EMA data sets (<a href="#files">files</a>) in detail and provides a thorough description of the eight <a href="#emaconstructs">EMA constructs</a> and a <a href="#emaconstructs">item-level overview</a>.</p>
+<section id="data-sets" class="level3">
+<h3 class="anchored" data-anchor-id="data-sets">Data sets</h3>
+<section id="files" class="level5">
+<h5 class="anchored" data-anchor-id="files">Files:</h5>
 <ul>
-<li><code>ema_content.pkl</code>: binary file format storing the ema relevant for analyses</li>
-<li><code>ema_meta.pkl</code>: xxx</li>
+<li><code>ema_beep.pkl</code></li>
+<li><code>ema_meta.pkl</code></li>
 </ul>
-<p><strong>Load the .pkl file:</strong></p>
-<div id="cell-9" class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># load the .pkl file</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">'data.pkl'</span>, <span class="st">'rb'</span>) <span class="im">as</span> f:</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    loaded_data <span class="op">=</span> pickle.load(f)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(loaded_data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</div>
 <p><strong>Details</strong> <code>ema_content.pkl</code> <strong>file:</strong></p>
+<details>
+<summary>
+<strong>Show details</strong>
+</summary>
 <div style="max-width: 800px; font-size: 14px;">
 <table class="caption-top table">
 <colgroup>
@@ -330,7 +398,7 @@ Glossary
 <tr class="even">
 <td>4</td>
 <td><code>timestamp_beep_completion</code></td>
-<td></td>
+<td>Timestamp at which a beep was completed</td>
 <td><code>datetime64</code></td>
 <td>interval</td>
 <td></td>
@@ -338,7 +406,7 @@ Glossary
 <tr class="odd">
 <td>5</td>
 <td><code>timestamp_beep_expiration</code></td>
-<td></td>
+<td>Timestamp at which the processing of the beep has expired (a beep expires after 30 min)</td>
 <td><code>datetime64</code></td>
 <td>interval</td>
 <td></td>
@@ -346,7 +414,7 @@ Glossary
 <tr class="even">
 <td>6</td>
 <td><code>measurment_burst</code></td>
-<td>Measurement burst describes the measurement point in the longitudinal study (Baseline (T0), after 20 therapy sessions (T20), or after therapy end respectively 365 days after therapy start (TPost)</td>
+<td>Measurement burst describes the measurement point in the longitudinal study [Baseline (T0), after 20 therapy sessions (T20), or after therapy end respectively 365 days after therapy start (TPost)]</td>
 <td><code>int</code></td>
 <td>ordinal</td>
 <td>0 = T0 <br> 1 = T20 <br> 2 = TPost</td>
@@ -378,7 +446,7 @@ Glossary
 <tr class="even">
 <td>10</td>
 <td><code>beep_per_person_id</code></td>
-<td>Unique beep identifier. Date and number of beep per customer</td>
+<td>Unique beep identifier. Date and number of beep per ID</td>
 <td><code>str</code></td>
 <td></td>
 <td></td>
@@ -386,54 +454,208 @@ Glossary
 <tr class="odd">
 <td>11</td>
 <td><code>date</code></td>
-<td>Date on which the question was generated</td>
+<td>Date on which the question/item was generated</td>
 <td><code>datetime64</code></td>
-<td></td>
+<td>interval</td>
 <td></td>
 </tr>
 <tr class="even">
 <td>12</td>
 <td><code>study_version</code></td>
-<td>Numerical coding of study version: the long version covers the whole</td>
-<td><code>str</code></td>
-<td></td>
-<td>long <br> short</td>
+<td>Study version (short version: includes Baseline (T0), long version: includes Baseline (T0), T20 and TPost)</td>
+<td><code>int</code></td>
+<td>nominal</td>
+<td>1= long <br> 2 = short</td>
 </tr>
 <tr class="odd">
 <td>13</td>
 <td><code>ema_burst_start</code></td>
-<td>Absolute start EMA measurement burst (i.e.&nbsp;intended start according to study protocol)</td>
+<td>Absolute start EMA measurement burst (i.e.&nbsp;defined start according to study protocol)</td>
 <td><code>datetime64</code></td>
-<td></td>
+<td>interval</td>
 <td></td>
 </tr>
 <tr class="even">
 <td>14</td>
 <td><code>ema_burst_end</code></td>
-<td>Absolute end EMA measurement burst (i.e.&nbsp;intended end according to study protocol)</td>
+<td>Absolute end EMA measurement burst (i.e.&nbsp;defined end according to study protocol)</td>
 <td><code>datetime64</code></td>
-<td></td>
+<td>interval</td>
 <td></td>
 </tr>
 <tr class="odd">
 <td>15</td>
 <td><code>season</code></td>
 <td>Describes the four seasons</td>
-<td><code>str</code></td>
+<td><code>int</code></td>
 <td>nominal</td>
 <td>1 = Spring <br> 2 = Summer <br> 3 = Fall <br> 4 = Winter</td>
 </tr>
 <tr class="even">
 <td>16</td>
 <td><code>time_of_day</code></td>
-<td>Time of day stratified into five categories (Early Morning = xx)</td>
-<td><code>str</code></td>
+<td>Time of day stratified into five categories (Early Morning = 00:00 - 00:00, Morning = 00:00 - 00:00, Afternoon = 00:00 - 00:00, Evening = 00:00 - 00:00, Night = 00:00 - 00:00)</td>
+<td><code>int</code></td>
 <td>nominal</td>
-<td>1 = Early Morning <br> 2 = Morning <br> 3 = Fall <br> 4 = Winter</td>
+<td>1 = Early Morning <br> 2 = Morning <br> 3 = Afternoon <br> 4 = Evening <br> 5 = Night</td>
+</tr>
+<tr class="odd">
+<td>17</td>
+<td><code>weekend</code></td>
+<td>Does the timestamp in the time series describes a day at the weekend?</td>
+<td><code>int</code></td>
+<td>nominal</td>
+<td>0 = No <br> 1 = Yes</td>
+</tr>
+<tr class="even">
+<td>18</td>
+<td><code>nr_beep_daily</code></td>
+<td>Number of questionnaire/beep within a day</td>
+<td><code>int</code></td>
+<td>ordinal</td>
+<td>1 - 8</td>
+</tr>
+<tr class="odd">
+<td>19</td>
+<td><code>n_beeps_completed</code></td>
+<td>Number of questionnaires/beeps completed by a person within a day</td>
+<td><code>int</code></td>
+<td>ordinal</td>
+<td>1 - 9</td>
+</tr>
+<tr class="even">
+<td>20</td>
+<td><code>ema_relat_burst_start</code></td>
+<td>Relative start EMA measurement burst (i.e.&nbsp;actual start)</td>
+<td><code>datetime64</code></td>
+<td>interval</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>21</td>
+<td><code>ema_relat_burst_start</code></td>
+<td>Relative end EMA measurement burst (i.e.&nbsp;actual end)</td>
+<td><code>datetime64</code></td>
+<td>interval</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>22</td>
+<td><code>absolute_day_index</code></td>
+<td>Day since expected (absolute) start</td>
+<td><code>int</code></td>
+<td>ratio</td>
+<td>1 - 16</td>
+</tr>
+<tr class="odd">
+<td>23</td>
+<td><code>relative_day_index</code></td>
+<td>Day since actual (relative) start</td>
+<td><code>int</code></td>
+<td>ratio</td>
+<td>1 - 16</td>
 </tr>
 </tbody>
 </table>
+
 </div>
+</details>
+<p><strong>Details</strong> <code>ema_meta.pkl</code> <strong>file:</strong></p>
+<details>
+<summary>
+<strong>Show details</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 8%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 17%">
+<col style="width: 17%">
+<col style="width: 14%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>No.</th>
+<th>Column name</th>
+<th>Description</th>
+<th>Data type</th>
+<th>Scale level</th>
+<th>Variable Level</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>id</code></td>
+<td>Unique identifier wearable and ema data within subproject 6 (SP6)</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>for_id</code></td>
+<td>Unique identifier across all PREACT subprojects and redcap</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>response_text</code></td>
+<td>Response displayed on device</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>item_code_map</code></td>
+<td>Numerical item code mapping</td>
+<td><code>int</code></td>
+<td>[insert]</td>
+<td>nominal</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>beep_type</code></td>
+<td></td>
+<td><code>int</code></td>
+<td></td>
+<td>nominal</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>beep_type_name</code></td>
+<td>Name of the questionnaire</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>item_order</code></td>
+<td>Order in which the items are displayed</td>
+<td><code>int</code></td>
+<td>0 - 8</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td><code>beep_num_run</code></td>
+<td>How many times a beep was opend before completion. Unique per answer. One beep can have multiple runs until completion</td>
+<td><code>int</code></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
+</section>
 </section>
 <section id="methods-hierarchical-data-structure" class="level3">
 <h3 class="anchored" data-anchor-id="methods-hierarchical-data-structure">Methods: Hierarchical Data Structure</h3>
@@ -1101,23 +1323,311 @@ Glossary
 </section>
 <section id="passive-sensor-data" class="level2">
 <h2 class="anchored" data-anchor-id="passive-sensor-data">Passive Sensor Data</h2>
-<section id="activity" class="level3">
-<h3 class="anchored" data-anchor-id="activity">Activity</h3>
+<p>This section outlines the passive sensor data set (<a href="#files">files</a>) in detail and provides a thorough description of the different wearable modalities (heartrate, acivity, sleep, GPS).</p>
+<section id="data-sets-1" class="level3">
+<h3 class="anchored" data-anchor-id="data-sets-1">Data sets</h3>
+<section id="files" class="level5">
+<h5 class="anchored" data-anchor-id="files">Files:</h5>
+<ul>
+<li><code>passive_data.feather</code></li>
+</ul>
+<p><strong>Details</strong> <code>passive_data.feather</code> <strong>file:</strong></p>
+<details>
+<summary>
+<strong>Show details</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 8%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 17%">
+<col style="width: 17%">
+<col style="width: 14%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>No.</th>
+<th>Column name</th>
+<th>Description</th>
+<th>Data type</th>
+<th>Scale level</th>
+<th>Variable Level</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>id</code></td>
+<td>Unique identifier wearable and ema data within subproject 6 (SP6)</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>for_id</code></td>
+<td>Unique identifier across all PREACT subprojects and redcap</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>modality</code></td>
+<td>Type of modality</td>
+<td><code>str</code></td>
+<td>categorical</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>timestamp_start</code></td>
+<td>Timestamp at which the specific modality recording starts</td>
+<td><code>datetime64</code></td>
+<td>interval</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>timestamp_end</code></td>
+<td>Timestamp at which the specific modality recording ends</td>
+<td><code>datetime64</code></td>
+<td>interval</td>
+<td></td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>time_interval</code></td>
+<td>Duration recording</td>
+<td><code>str</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>float value</code></td>
+<td>Variable level of the modality</td>
+<td><code>float</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td><code>boolean_value</code></td>
+<td>Variable level of the modality</td>
+<td><code>boolean</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td><code>start_date</code></td>
+<td>Start date of recording</td>
+<td><code>datetime64</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td><code>start_hour</code></td>
+<td>Start hour of recording</td>
+<td><code>datetime64</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td><code>study_version</code></td>
+<td>Study version (short version: includes Baseline (T0), long version: includes Baseline (T0), T20 and TPost)</td>
+<td><code>int</code></td>
+<td>nominal</td>
+<td>1= long <br> 2 = short</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
 </section>
-<section id="heartrate" class="level3">
-<h3 class="anchored" data-anchor-id="heartrate">Heartrate</h3>
+<section id="heartrate" class="level4">
+<h4 class="anchored" data-anchor-id="heartrate">Heartrate</h4>
+<details>
+<summary>
+<strong>Show details</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>No.</th>
+<th>Modality</th>
+<th>Device</th>
+<th>Data type</th>
+<th>Scale level</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>heartrate_PPG</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>rmssd</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
 </section>
-<section id="sleep" class="level3">
-<h3 class="anchored" data-anchor-id="sleep">Sleep</h3>
+<section id="activity" class="level4">
+<h4 class="anchored" data-anchor-id="activity">Activity</h4>
+<details>
+<summary>
+<strong>Show details</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>No.</th>
+<th>Modality</th>
+<th>Device</th>
+<th>Data type</th>
+<th>Scale level</th>
+<th>Features</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>Steps</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>ActivityType</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>ActivityBinary</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>RunBinary</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>BikeBinary</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>WalkBinary</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>FloorsClimed</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td><code>ElevationGain</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td><code>ElevationGain</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td><code>ActiveBurnedCalories</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td><code>ActiveTypeDetail1</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td><code>ActiveTypeDetail2</code></td>
+<td>Withings Scanwatch</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
 </section>
-<section id="gps" class="level3">
-<h3 class="anchored" data-anchor-id="gps">GPS</h3>
+<section id="sleep" class="level4">
+<h4 class="anchored" data-anchor-id="sleep">Sleep</h4>
+</section>
+<section id="gps" class="level4">
+<h4 class="anchored" data-anchor-id="gps">GPS</h4>
+</section>
 </section>
 </section>
 <section id="ecg-data" class="level2">
 <h2 class="anchored" data-anchor-id="ecg-data">ECG Data</h2>
+<section id="data-sets-2" class="level3">
+<h3 class="anchored" data-anchor-id="data-sets-2">Data sets</h3>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->

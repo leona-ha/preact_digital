@@ -15,8 +15,18 @@ website:
     contents:
       - href: index.qmd
         text: Home
+      - href: quick_overview.ipynb
+        text: Quick overview
       - href: documentation.ipynb
-        text: TIKI Features Documentation
+        text: Feature Database Documentation
+      - section: Pipelines preprocessing
+        contents:
+        - href: EMA preprocessing.ipynb
+          text: EMA preprocessing
+        - href: Passive preprocessing.ipynb
+          text: Passive preprocessing
+        - href: ECG preprocessing.ipynb
+          text: ECG preprocessing
       - href: about.qmd
         text: About
 

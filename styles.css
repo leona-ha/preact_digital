@@ -28,3 +28,12 @@
 /* old: #e0e1dd
         #415a77
         #415a77
+
+/* Change the background of the callout title (headline) */
+.callout-tip.callout .callout-title {
+  background-color: #B0C4B1; /* Example: soft yellow */
+  color: #000000;            /* Text color */
+  padding: 0.75em;
+  border-radius: 6px 6px 0 0; /* Rounded top corners */
+}
+
