@@ -1,0 +1,1 @@
+Source files for the Quarto website. Edit files in /docs-src (this) directory instead of /docs, as the latter get overwritten by quarto.

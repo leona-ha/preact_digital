@@ -13,21 +13,21 @@ website:
     style: "docked"
     collapse-level: 1
     contents:
-      - href: index.qmd
+      - href: docs-src/index.qmd
         text: Home
-      - href: quick_overview.ipynb
+      - href: docs-src/quick_overview.ipynb
         text: Quick overview
-      - href: documentation.ipynb
+      - href: docs-src/documentation.ipynb
         text: Feature Database Documentation
       - section: Pipelines preprocessing
         contents:
-        - href: EMA preprocessing.ipynb
+        - href: docs-src/EMA preprocessing.ipynb
           text: EMA preprocessing
-        - href: Passive preprocessing.ipynb
+        - href: docs-src/Passive preprocessing.ipynb
           text: Passive preprocessing
-        - href: ECG preprocessing.ipynb
+        - href: docs-src/ECG preprocessing.ipynb
           text: ECG preprocessing
-      - href: about.qmd
+      - href: docs-src/about.qmd
         text: About
 
 format:
@@ -35,7 +35,7 @@ format:
     theme:
      - cosmo
      - brand
-    css: styles.css
+    css: docs-src/styles.css
     toc: true
     # number-sections: true
 
