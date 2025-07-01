@@ -13,21 +13,21 @@ website:
     style: "docked"
     collapse-level: 1
     contents:
-      - href: docs-src/index.qmd
+      - href: quarto/docs-src/index.qmd
         text: Home
-      - href: docs-src/quick_overview.ipynb
+      - href: quarto/docs-src/quick_overview.ipynb
         text: Quick overview
-      - href: docs-src/documentation.ipynb
+      - href: quarto/docs-src/documentation.ipynb
         text: Feature Database Documentation
       - section: Pipelines preprocessing
         contents:
-        - href: docs-src/EMA preprocessing.ipynb
+        - href: quarto/docs-src/EMA preprocessing.ipynb
           text: EMA preprocessing
-        - href: docs-src/Passive preprocessing.ipynb
+        - href: quarto/docs-src/Passive preprocessing.ipynb
           text: Passive preprocessing
-        - href: docs-src/ECG preprocessing.ipynb
+        - href: quarto/docs-src/ECG preprocessing.ipynb
           text: ECG preprocessing
-      - href: docs-src/about.qmd
+      - href: quarto/docs-src/about.qmd
         text: About
 
 format:
@@ -35,7 +35,7 @@ format:
     theme:
      - cosmo
      - brand
-    css: docs-src/styles.css
+    css: quarto/docs-src/styles.css
     toc: true
     # number-sections: true
 
