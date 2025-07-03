@@ -1,1 +1,6 @@
-Source files for the Quarto website. Edit files in /docs-src (this) directory instead of /docs, as the latter get overwritten by quarto.
+Source files for the Quarto website.
+
+After edits use the following command to publish changes to the github website:
+```bash
+quarto publish gh-pages
+```
