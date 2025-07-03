@@ -1,4 +1,6 @@
+# Ignore Quarto cache and output directories
 /.quarto/
+/_site/
 
 # ingore Mac OS files
 .DS_Store

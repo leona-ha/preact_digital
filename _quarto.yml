@@ -1,6 +1,6 @@
 project:
   type: website
-  output-dir: docs
+  output-dir: _site
 
 website:
   title: "FOR5187 | PREACT"
@@ -13,21 +13,21 @@ website:
     style: "docked"
     collapse-level: 1
     contents:
-      - href: quarto/docs-src/index.qmd
+      - href: quarto/index.qmd
         text: Home
-      - href: quarto/docs-src/quick_overview.ipynb
+      - href: quarto/quick_overview.ipynb
         text: Quick overview
-      - href: quarto/docs-src/documentation.ipynb
+      - href: quarto/documentation.ipynb
         text: Feature Database Documentation
       - section: Pipelines preprocessing
         contents:
-        - href: quarto/docs-src/EMA preprocessing.ipynb
+        - href: quarto/EMA preprocessing.ipynb
           text: EMA preprocessing
-        - href: quarto/docs-src/Passive preprocessing.ipynb
+        - href: quarto/Passive preprocessing.ipynb
           text: Passive preprocessing
-        - href: quarto/docs-src/ECG preprocessing.ipynb
+        - href: quarto/ECG preprocessing.ipynb
           text: ECG preprocessing
-      - href: quarto/docs-src/about.qmd
+      - href: quarto/about.qmd
         text: About
 
 format:
@@ -35,7 +35,7 @@ format:
     theme:
      - cosmo
      - brand
-    css: quarto/docs-src/styles.css
+    css: quarto/styles.css
     toc: true
     # number-sections: true
 
