@@ -5,7 +5,7 @@ from tqdm import tqdm
 import psutil 
 
 #####################################################################################################################
-
+#? this can be a function instead of a class
 class EMAMapper:
     """
     A class to coordinate the mapping of sensor data to EMA blocks.
@@ -53,6 +53,7 @@ class DataCleaner:
     def __init__(self):
         
         # Initialize counters for entries removed
+        #? those aren't used in the current code
         self.hr_entries_removed = 0
         self.step_entries_removed = 0
 
@@ -227,7 +228,7 @@ class SensorDataMapper:
         # Process data in batches of users
         for i in range(num_batches):
             user_batch = unique_users[i * batch_size:(i + 1) * batch_size]
-            print(f"Processing user batch {i + 1}/{num_batches}...")
+            print(f"Processing user batch {i + 1}/{num_batches}...") #? switch prints to logging
     
             # Filter data for the current batch of users
             ema_batch = self.df_ema[self.df_ema['customer'].isin(user_batch)]
@@ -250,7 +251,7 @@ class SensorDataMapper:
                 df_joined['overlap_end'] = df_joined[['endTimestamp', 'sensor_block_end']].min(axis=1)
                 df_joined['overlap_duration'] = (df_joined['overlap_end'] - df_joined['overlap_start']).dt.total_seconds()
                 df_joined['step_duration'] = (df_joined['endTimestamp'] - df_joined['startTimestamp']).dt.total_seconds()
-                df_joined['proportion'] = df_joined['overlap_duration'] / df_joined['step_duration']
+                df_joined['proportion'] = df_joined['overlap_duration'] / df_joined['step_duration'] #? can it be zero?
                 df_joined['weighted_steps'] = df_joined['proportion'] * df_joined['doubleValue']
     
                 # Aggregate steps by unique_blocks
