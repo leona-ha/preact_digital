@@ -163,3 +163,91 @@ def summarize_missing_data(
             group_missing_df[group_name] = (df[cols] == -1).any(axis=1).astype(int)
 
     return group_missing_df
+
+
+
+def compute_availability_metrics(sub):
+    """
+    Given a subset of the dataframe for a single participant,
+    return the daily availability metrics (including days with no data),
+    and retain the ema_base_start column.
+    """
+    def row_has_data(row):
+        t = row['type']
+        if t in double_value_types:
+            return not pd.isnull(row['doubleValue'])
+        elif t in long_value_types:
+            return not pd.isnull(row['longValue'])
+        elif t in string_value_types:
+            return not pd.isnull(row['stringValue'])
+        elif t in boolean_value_types:
+            return not pd.isnull(row['booleanValue'])
+        return False
+    
+    # 1) Mark rows that truly have data
+    sub['has_data'] = sub.apply(row_has_data, axis=1)
+
+    # 2) Aggregate at hourly level
+    hourly = (
+        sub.groupby(['type', 'startTimestamp_day', 'startTimestamp_hour'], observed=True)['has_data']
+           .any()  # yields boolean: True if at least one row has data in that hour
+           .reset_index(name='has_data_in_hour')
+    )
+
+    # 3) Aggregate at daily level
+    daily_agg = (
+        hourly.groupby(['type', 'startTimestamp_day'], observed=True)
+              .agg(
+                  available_binary=('has_data_in_hour', 'any'),  # True if any hour had data
+                  available_hours=('has_data_in_hour', 'sum')     # count of hours with data
+              )
+              .reset_index()
+    )
+    # Convert boolean to int for available_binary; available_hours remains numeric.
+    daily_agg['available_binary'] = daily_agg['available_binary'].astype(int)
+    daily_agg['available_hours'] = daily_agg['available_hours'].astype(int)
+
+    # ----------- GENERATE FULL DATE RANGE FOR THIS PARTICIPANT -----------
+    # Use ema_base_start from sub (it exists in the original dataframe)
+    baseline_date = sub['ema_base_start'].min()
+    max_date = sub['startTimestamp_day'].max()
+
+    if pd.isnull(baseline_date) or pd.isnull(max_date):
+        daily_agg['customer'] = sub['customer'].iloc[0]
+        daily_agg['ema_base_start'] = sub['ema_base_start'].iloc[0]
+        return daily_agg
+
+    # Create a full daily date range from baseline_date to max_date
+    all_dates = pd.date_range(start=baseline_date, end=max_date, freq='D')
+
+    # Unique types present for this participant
+    unique_types = sub['type'].unique()
+
+    # Cartesian product of [all types] x [all dates]
+    all_combos = pd.MultiIndex.from_product(
+        [unique_types, all_dates],
+        names=['type', 'startTimestamp_day']
+    )
+    all_days_df = all_combos.to_frame(index=False)
+
+    # Merge daily_agg onto all possible (type, day) combos
+    daily_agg_full = pd.merge(
+        all_days_df,
+        daily_agg,
+        on=['type', 'startTimestamp_day'],
+        how='left'
+    )
+
+    # Fill missing availability with 0
+    daily_agg_full['available_binary'] = daily_agg_full['available_binary'].fillna(0)
+    daily_agg_full['available_hours'] = daily_agg_full['available_hours'].fillna(0)
+
+    # Convert them to int
+    daily_agg_full['available_binary'] = daily_agg_full['available_binary'].astype(int)
+    daily_agg_full['available_hours'] = daily_agg_full['available_hours'].astype(int)
+
+    # Assign the participant ID and ema_base_start from the original data
+    daily_agg_full['customer'] = sub['customer'].iloc[0]
+    daily_agg_full['ema_base_start'] = sub['ema_base_start'].iloc[0]
+
+    return daily_agg_full
