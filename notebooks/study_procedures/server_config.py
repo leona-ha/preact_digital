@@ -1,6 +1,6 @@
 # configuration file for the TIKI project
 
-datapath = "/sc-projects/sc-proj-cc15-preact/SP6/tiki_data"
+datapath = "/sc-projects/sc-proj-cc15-preact/SP6/"
 proj_sheet = "1z8LZJBBMzzAmiXIS47X8SLk-zSMwDIXSKPit4IlmfuE"
 credential_path = "/home/leha18/tiki_code/notebooks/tiki-399609-b68b5ade4dfb.json"
 preprocessed_path = "/sc-projects/sc-proj-cc15-preact/SP6/tiki_data/preprocessed"

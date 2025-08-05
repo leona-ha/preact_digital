@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Create a unified, timezone‑aware Parquet backup from mixed CSV exports.
+
+Changes compared with the previous version
+------------------------------------------
+* All timestamp columns are now **tz‑aware (UTC)** from the moment they are
+  parsed.  This fixes the FutureWarning about assigning tz‑aware values into
+  tz‑naïve Series.
+* Parquet schema updated to `pa.timestamp("ns", tz="UTC")`.
+* Helper functions `epoch_to_utc` and `parse_iso_utc` simplified—no
+  `.dt.tz_localize(None)` calls.
+"""
 
 import os, sys, re, glob
 import pandas as pd
@@ -7,127 +18,188 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from datetime import datetime
+from typing import Optional
 
 # ---------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------
-def log(msg: str):
+
+def log(msg: str) -> None:
+    """Print a timestamped log line to stdout."""
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
 
 # ---------------------------------------------------------------------
 # Pfade wie im Notebook
 # ---------------------------------------------------------------------
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-SRC_DIR  = os.path.join(BASE_DIR, 'src')
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SRC_DIR = os.path.join(BASE_DIR, "src")
 for p in (BASE_DIR, SRC_DIR):
     if p not in sys.path:
         sys.path.append(p)
-from server_config import raw_path, backup_path, preprocessed_path
+
+from server_config import raw_path, backup_path, preprocessed_path  # noqa: E402
 
 PATTERN_BIG = os.path.join(backup_path, "first_backup", "tiki_backup_*.csv")
-PATTERN_S1  = os.path.join(raw_path, "tiki_backup_files", "export_tiki_21052024", "epoch_part*.csv")
-PATTERN_S2  = os.path.join(raw_path, "tiki_backup_files", "export_tiki_11112024", "epoch_part*.csv")
-PATTERN_S3  = os.path.join(raw_path, "tiki_backup_files", "export_tiki_05052025", "epoch_part*.csv")
+PATTERN_S1 = os.path.join(
+    raw_path, "tiki_backup_files", "export_tiki_21052024", "epoch_part*.csv"
+)
+PATTERN_S2 = os.path.join(
+    raw_path, "tiki_backup_files", "export_tiki_11112024", "epoch_part*.csv"
+)
+PATTERN_S3 = os.path.join(
+    raw_path, "tiki_backup_files", "export_tiki_05052025", "epoch_part*.csv"
+)
 
 OUT_PARQUET = os.path.join(preprocessed_path, "backup_passive_05052025.parquet")
 
-SCHEMA = ["customer","startTimestamp","endTimestamp","timezoneOffset",
-          "type","stringValue","booleanValue","doubleValue","longValue"]
-PA_SCHEMA = pa.schema([
-    pa.field("customer",       pa.string()),
-    pa.field("startTimestamp", pa.timestamp("ns")),
-    pa.field("endTimestamp",   pa.timestamp("ns")),
-    pa.field("timezoneOffset", pa.int32()),
-    pa.field("type",           pa.string()),
-    pa.field("stringValue",    pa.string()),
-    pa.field("booleanValue",   pa.bool_()),
-    pa.field("doubleValue",    pa.float64()),
-    pa.field("longValue",      pa.float64()),
-])
+SCHEMA = [
+    "customer",
+    "startTimestamp",
+    "endTimestamp",
+    "timezoneOffset",
+    "type",
+    "stringValue",
+    "booleanValue",
+    "doubleValue",
+    "longValue",
+]
 
-CHUNK  = 1_000_000
-MAX_MS = 4102444800000  # ~2100-01-01
+# Timestamps are tz‑aware UTC now
+PA_SCHEMA = pa.schema(
+    [
+        pa.field("customer", pa.string()),
+        pa.field("startTimestamp", pa.timestamp("ns", tz="UTC")),
+        pa.field("endTimestamp", pa.timestamp("ns", tz="UTC")),
+        pa.field("timezoneOffset", pa.int32()),
+        pa.field("type", pa.string()),
+        pa.field("stringValue", pa.string()),
+        pa.field("booleanValue", pa.bool_()),
+        pa.field("doubleValue", pa.float64()),
+        pa.field("longValue", pa.float64()),
+    ]
+)
+
+CHUNK = 1_000_000
+MAX_MS = 4_102_444_800_000  # ~2100‑01‑01
 
 # ---------------------------------------------------------------------
 # Hilfsfunktionen
 # ---------------------------------------------------------------------
+
 def epoch_to_utc(series: pd.Series) -> pd.Series:
-    """Epoch-ms -> UTC (naiv); ungültige Werte -> NaT."""
+    """Convert epoch milliseconds to **tz‑aware UTC**; invalid values → NaT."""
     vals = pd.to_numeric(series, errors="coerce").astype("float64")
     mask = np.isfinite(vals) & (vals >= 0) & (vals <= MAX_MS)
-    out = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns]")
+
+    # Pre‑allocate a tz‑aware destination Series
+    out = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns, UTC]")
+
     if mask.any():
-        out.loc[mask] = (
-            pd.to_datetime(vals[mask].astype("int64"), unit="ms", utc=True, errors="coerce")
-              .dt.tz_localize(None)
+        out.loc[mask] = pd.to_datetime(
+            vals[mask].astype("int64"), unit="ms", utc=True, errors="coerce"
         )
     return out
 
+
 def parse_iso_utc(series: pd.Series) -> pd.Series:
-    """ISO-8601 mit Offset -> UTC (naiv)."""
+    """Parse ISO‑8601 strings with offset to **tz‑aware UTC**; invalid → NaT."""
     ts = pd.to_datetime(series, format="%Y-%m-%dT%H:%M:%S%z", utc=True, errors="coerce")
     need_frac = ts.isna()
     if need_frac.any():
-        ts_frac = pd.to_datetime(series[need_frac],
-                                 format="%Y-%m-%dT%H:%M:%S.%f%z",
-                                 utc=True, errors="coerce")
+        ts_frac = pd.to_datetime(
+            series[need_frac],
+            format="%Y-%m-%dT%H:%M:%S.%f%z",
+            utc=True,
+            errors="coerce",
+        )
         ts.loc[need_frac] = ts_frac
-    return ts.dt.tz_localize(None)
+    return ts  # tz‑aware UTC
+
 
 def ensure_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """Fill missing columns and enforce numeric dtypes."""
     for c in SCHEMA:
         if c not in df:
             df[c] = pd.NA
-    df["customer"] = df["customer"].astype("string").str.split("@").str[0].str[:4]
-    for c in ("timezoneOffset","doubleValue","longValue"):
+
+    # Hash/anonymise customer
+    df["customer"] = (
+        df["customer"].astype("string", copy=False).str.split("@").str[0].str[:4]
+    )
+
+    for c in ("timezoneOffset", "doubleValue", "longValue"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
+
     return df[SCHEMA]
 
 # ---------------------------------------------------------------------
 # Writer / Zustand
 # ---------------------------------------------------------------------
-parquet_writer = None
-last_ts      = None
-last_dataset = None
+
+parquet_writer: Optional[pq.ParquetWriter] = None
+last_ts: Optional[pd.Timestamp] = None
+last_dataset: Optional[str] = None
 os.makedirs(os.path.dirname(OUT_PARQUET), exist_ok=True)
 
-def write_df(df: pd.DataFrame):
-    """Chunk normalisieren und direkt als Row Group schreiben."""
+
+def write_df(df: pd.DataFrame) -> None:
+    """Normalise a chunk and write it as its own Row Group."""
     global parquet_writer
+
     df = ensure_schema(df)
     table = pa.Table.from_pandas(df, preserve_index=False)
+
+    # Cast only if necessary (table.schema == PA_SCHEMA is cheap)
     if table.schema != PA_SCHEMA:
         table = table.cast(PA_SCHEMA, safe=False)
+
     if parquet_writer is None:
         parquet_writer = pq.ParquetWriter(
             OUT_PARQUET, table.schema, compression="snappy"
         )
         log(f"[WRITE] opened {OUT_PARQUET}")
+
     parquet_writer.write_table(table)
 
+
 # ---------------------------------------------------------------------
-# BIG verarbeiten (ISO -> UTC)
+# BIG verarbeiten (ISO → UTC)
 # ---------------------------------------------------------------------
+
 big_files = sorted(
     glob.glob(PATTERN_BIG),
-    key=lambda p: re.match(r".*_(\d{4}-\d{2}-\d{2})_(\d+)\.csv", os.path.basename(p))
-                  and (pd.to_datetime(re.match(r".*_(\d{4}-\d{2}-\d{2})_(\d+)\.csv",
-                                              os.path.basename(p)).group(1)),
-                       int(re.match(r".*_(\d{4}-\d{2}-\d{2})_(\d+)\.csv",
-                                    os.path.basename(p)).group(2)))
-                  or (pd.Timestamp.min,0)
+    key=lambda p: (
+        m := re.match(r".*_(\d{4}-\d{2}-\d{2})_(\d+)\.csv", os.path.basename(p))
+    )
+    and (pd.to_datetime(m.group(1)), int(m.group(2)))
+    or (pd.Timestamp.min, 0),
 )
 
 log(f"[BIG] {len(big_files)} Dateien")
 for f in big_files:
-    for chunk in pd.read_csv(f, chunksize=CHUNK, low_memory=False,
-                             dtype={"startTimestamp":"str","endTimestamp":"str"}):
+    for chunk in pd.read_csv(
+        f,
+        chunksize=CHUNK,
+        low_memory=False,
+        dtype={"startTimestamp": "str", "endTimestamp": "str"},
+    ):
         chunk["startTimestamp"] = parse_iso_utc(chunk["startTimestamp"])
-        chunk["endTimestamp"]   = parse_iso_utc(chunk["endTimestamp"])
-        for c in ("timezoneOffset","type","stringValue","booleanValue","doubleValue","longValue","customer"):
+        chunk["endTimestamp"] = parse_iso_utc(chunk["endTimestamp"])
+        for c in (
+            "timezoneOffset",
+            "type",
+            "stringValue",
+            "booleanValue",
+            "doubleValue",
+            "longValue",
+            "customer",
+        ):
             if c not in chunk:
                 chunk[c] = pd.NA
+
         write_df(chunk)
+
         ts_valid = chunk["startTimestamp"].dropna()
         if not ts_valid.empty:
             m = ts_valid.max()
@@ -138,24 +210,35 @@ last_dataset = "BIG"
 log(f"[BIG DONE] last_ts={last_ts}")
 
 # ---------------------------------------------------------------------
-# SMALL-Datasets – Epoch ms -> UTC
+# SMALL‑Datasets – Epoch ms → UTC
 # ---------------------------------------------------------------------
+
 for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3)]:
     files = sorted(glob.glob(pattern))
     log(f"[{label}] {len(files)} Dateien")
 
-    prev_last_ts    = last_ts
-    first_raw       = None
-    first_written   = None
+    prev_last_ts = last_ts
+    first_raw: Optional[pd.Timestamp] = None
+    first_written: Optional[pd.Timestamp] = None
     removed_overlap = 0
 
     for f in files:
-        for chunk in pd.read_csv(f, encoding="latin-1", chunksize=CHUNK, low_memory=False):
+        for chunk in pd.read_csv(
+            f, encoding="latin-1", chunksize=CHUNK, low_memory=False
+        ):
             chunk["startTimestamp"] = epoch_to_utc(chunk["startTimestamp"])
-            chunk["endTimestamp"]   = epoch_to_utc(chunk["endTimestamp"])
+            chunk["endTimestamp"] = epoch_to_utc(chunk["endTimestamp"])
+
             if "timezoneOffset" not in chunk:
                 chunk["timezoneOffset"] = 0
-            for c in ("type","stringValue","booleanValue","doubleValue","longValue","customer"):
+            for c in (
+                "type",
+                "stringValue",
+                "booleanValue",
+                "doubleValue",
+                "longValue",
+                "customer",
+            ):
                 if c not in chunk:
                     chunk[c] = pd.NA
 
@@ -164,7 +247,12 @@ for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3
                 if not tmp.empty:
                     first_raw = tmp.min()
 
-            if prev_last_ts is not None and last_dataset is not None and label != last_dataset:
+            # Drop rows that overlap with the previous dataset’s max timestamp
+            if (
+                prev_last_ts is not None
+                and last_dataset is not None
+                and label != last_dataset
+            ):
                 before = len(chunk)
                 chunk = chunk[chunk["startTimestamp"] >= prev_last_ts]
                 removed_overlap += before - len(chunk)
@@ -178,6 +266,7 @@ for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3
                     first_written = tmp2.min()
 
             write_df(chunk)
+
             ts_valid = chunk["startTimestamp"].dropna()
             if not ts_valid.empty:
                 m = ts_valid.max()
@@ -196,6 +285,7 @@ for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3
 # ---------------------------------------------------------------------
 # Abschluss
 # ---------------------------------------------------------------------
+
 if parquet_writer is not None:
     parquet_writer.close()
     log(f"[DONE] last_ts={last_ts} -> {OUT_PARQUET}")
