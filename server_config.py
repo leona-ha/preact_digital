@@ -1,4 +1,4 @@
-s# configuration file for the TIKI project
+# configuration file for the TIKI project
 
 datapath = "/sc-projects/sc-proj-cc15-preact/SP6s"
 proj_sheet = "1z8LZJBBMzzAmiXIS47X8SLk-zSMwDIXSKPit4IlmfuE"
