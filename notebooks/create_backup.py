@@ -230,7 +230,7 @@ for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3
             chunk["endTimestamp"] = epoch_to_utc(chunk["endTimestamp"])
 
             if "timezoneOffset" not in chunk:
-                chunk["timezoneOffset"] = 0
+                chunk["timezoneOffset"] = pd.NA
             for c in (
                 "type",
                 "stringValue",
