@@ -1459,12 +1459,22 @@ Glossary
 </summary>
 <div style="max-width: 800px; font-size: 14px;">
 <table class="caption-top table">
+<colgroup>
+<col style="width: 7%">
+<col style="width: 18%">
+<col style="width: 18%">
+<col style="width: 15%">
+<col style="width: 15%">
+<col style="width: 12%">
+<col style="width: 12%">
+</colgroup>
 <thead>
 <tr class="header">
 <th>No.</th>
 <th>Modality</th>
 <th>Device</th>
 <th>Data type</th>
+<th>Sampling Rate</th>
 <th>Scale level</th>
 <th>Features</th>
 </tr>
@@ -1477,11 +1487,13 @@ Glossary
 <td></td>
 <td></td>
 <td></td>
+<td></td>
 </tr>
 <tr class="even">
 <td>2</td>
 <td><code>rmssd</code></td>
 <td>Withings Scanwatch</td>
+<td></td>
 <td></td>
 <td></td>
 <td></td>
@@ -1606,6 +1618,173 @@ Glossary
 <td></td>
 <td></td>
 <td></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
+<p><strong>Steps: Daily Aggregates</strong></p>
+<p>Daily Features inspired by [insert RADAR study reference]</p>
+<p>File name: <code>steps_daily</code></p>
+<details>
+<summary>
+<strong>Show details</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 41%">
+<col style="width: 41%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>No.</th>
+<th>Column Name</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>id</code></td>
+<td>Unique identifier wearable and ema data within subproject 6 (SP6)</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>for_id</code></td>
+<td>Unique identifier across all PREACT subprojects and redcap</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>date</code></td>
+<td>Day timestamp (floor to day) UTC</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>n_steps_day</code></td>
+<td>Total number of walked steps within the day</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>spm_25_steps</code></td>
+<td>25th percentile of daily steps per minute distribution</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>spm_50_steps</code></td>
+<td>50th percentile of daily steps per minute distribution</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>spm_75_steps</code></td>
+<td>75th percentile of daily steps per minute distribution</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td><code>spm_max_steps</code></td>
+<td>Maximum steps per minute along all day</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td><code>spm_count_steps</code></td>
+<td>Number of minutes with step data available</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td><code>spm_mean_steps</code></td>
+<td>Mean steps per minute along all day (among available records)</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td><code>spm_std_steps</code></td>
+<td>Standard deviation of steps per minute along all day</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td><code>spm_skew_steps</code></td>
+<td>Skewness of steps per minute along all day</td>
+</tr>
+<tr class="odd">
+<td>13</td>
+<td><code>spm_kurtosis_steps</code></td>
+<td>Kurtosis of steps per minute along all day</td>
+</tr>
+<tr class="even">
+<td>14</td>
+<td><code>night_sum_steps</code></td>
+<td>Sum of steps per minute during nighttime (00:00-05:59)</td>
+</tr>
+<tr class="odd">
+<td>15</td>
+<td><code>night_mean_steps</code></td>
+<td>Mean steps per minute during nighttime (00:00-05:59)</td>
+</tr>
+<tr class="even">
+<td>16</td>
+<td><code>n_hour_steps</code></td>
+<td>Mean of hourly step sums (sum of steps per minute, averaged by hour)</td>
+</tr>
+<tr class="odd">
+<td>17</td>
+<td><code>spm_max_avghr_steps</code></td>
+<td>Maximum steps per minute, averaged by hour</td>
+</tr>
+<tr class="even">
+<td>18</td>
+<td><code>spm_mean_avghr_steps</code></td>
+<td>Mean steps per minute, averaged by hour</td>
+</tr>
+<tr class="odd">
+<td>19</td>
+<td><code>spm_std_avghr_steps</code></td>
+<td>Standard deviation of steps per minute, averaged by hour</td>
+</tr>
+<tr class="even">
+<td>20</td>
+<td><code>spm_skew_avghr_steps</code></td>
+<td>Skewness of steps per minute, averaged by hour</td>
+</tr>
+<tr class="odd">
+<td>21</td>
+<td><code>spm_kurtosis_avghr_steps</code></td>
+<td>Kurtosis of steps per minute, averaged by hour</td>
+</tr>
+<tr class="even">
+<td>22</td>
+<td><code>n_steps_activehr_steps</code></td>
+<td>Maximum of the hourly sum of steps along all day</td>
+</tr>
+<tr class="odd">
+<td>23</td>
+<td><code>timestamp_max_activehr_steps</code></td>
+<td>Most active hour (hour with maximum hourly sum of steps)</td>
+</tr>
+<tr class="even">
+<td>24</td>
+<td><code>max_spm_activehr_steps</code></td>
+<td>Maximum step cadence during the most active hour</td>
+</tr>
+<tr class="odd">
+<td>25</td>
+<td><code>mean_spm_activehr_steps</code></td>
+<td>Average step cadence during the most active hour</td>
+</tr>
+<tr class="even">
+<td>26</td>
+<td><code>dailysteps_25perc_steps</code></td>
+<td>Hour at which 25th percentile of daily steps occurred (cumulative)</td>
+</tr>
+<tr class="odd">
+<td>27</td>
+<td><code>dailysteps_50perc_steps</code></td>
+<td>Hour at which 50th percentile of daily steps occurred (cumulative)</td>
+</tr>
+<tr class="even">
+<td>28</td>
+<td><code>dailysteps_75perc_steps</code></td>
+<td>Hour at which 75th percentile of daily steps occurred</td>
 </tr>
 </tbody>
 </table>
