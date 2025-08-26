@@ -40,3 +40,6 @@ format:
     # number-sections: true
 
 
+render:
+    - "**/*"                                # render everthing
+    - "!notebooks/er_aggregation.ipynb"     # _except this file         
