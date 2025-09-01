@@ -1,35 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://leona-ha.github.io/preact_digital/quarto/ECG preprocessing.html</loc>
-    <lastmod>2025-07-08T07:36:47.727Z</lastmod>
-  </url>
-  <url>
-    <loc>https://leona-ha.github.io/preact_digital/quarto/EMA preprocessing.html</loc>
-    <lastmod>2025-07-08T07:36:47.736Z</lastmod>
-  </url>
-  <url>
-    <loc>https://leona-ha.github.io/preact_digital/quarto/index.html</loc>
-    <lastmod>2025-07-08T07:36:47.810Z</lastmod>
+    <loc>https://leona-ha.github.io/preact_digital/quarto/quick_overview.html</loc>
+    <lastmod>2025-07-03T07:34:01.107Z</lastmod>
   </url>
   <url>
     <loc>https://leona-ha.github.io/preact_digital/quarto/Passive preprocessing.html</loc>
-    <lastmod>2025-07-08T07:36:47.744Z</lastmod>
+    <lastmod>2025-07-03T07:34:01.105Z</lastmod>
   </url>
   <url>
-    <loc>https://leona-ha.github.io/preact_digital/code/notebooks/er_aggregation.html</loc>
-    <lastmod>2025-07-24T14:04:44.852Z</lastmod>
+    <loc>https://leona-ha.github.io/preact_digital/quarto/ECG preprocessing.html</loc>
+    <lastmod>2025-07-03T07:34:01.105Z</lastmod>
   </url>
   <url>
     <loc>https://leona-ha.github.io/preact_digital/quarto/about.html</loc>
-    <lastmod>2025-07-08T07:36:47.765Z</lastmod>
+    <lastmod>2025-07-03T07:34:01.106Z</lastmod>
   </url>
   <url>
-    <loc>https://leona-ha.github.io/preact_digital/quarto/quick_overview.html</loc>
-    <lastmod>2025-07-08T07:36:47.819Z</lastmod>
+    <loc>https://leona-ha.github.io/preact_digital/quarto/index.html</loc>
+    <lastmod>2025-07-03T07:34:01.107Z</lastmod>
+  </url>
+  <url>
+    <loc>https://leona-ha.github.io/preact_digital/quarto/EMA preprocessing.html</loc>
+    <lastmod>2025-07-03T07:34:01.105Z</lastmod>
   </url>
   <url>
     <loc>https://leona-ha.github.io/preact_digital/quarto/documentation.html</loc>
-    <lastmod>2025-08-26T21:24:03.474Z</lastmod>
+    <lastmod>2025-09-01T09:00:50.572Z</lastmod>
   </url>
 </urlset>
