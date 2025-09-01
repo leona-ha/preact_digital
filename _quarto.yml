@@ -1,6 +1,12 @@
 project:
   type: website
   output-dir: _site
+  render:
+    - "quarto/*.qmd"
+    - "quarto/*.ipynb"
+    - "code/notebooks/*.ipynb"
+    - "!code/notebooks/er_aggregation.ipynb"
+
 
 website:
   title: "FOR5187 | PREACT"
@@ -40,6 +46,3 @@ format:
     # number-sections: true
 
 
-render:
-    - "**/*"                                # render everthing
-    - "!notebooks/er_aggregation.ipynb"     # _except this file         
