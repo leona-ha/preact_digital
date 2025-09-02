@@ -1,7 +1,13 @@
 ---
-title: "my-site"
+title: "PREACT-digital: Feature Documentation"
 ---
 
-This is a Quarto website.
+Welcome to PREACT-digital! 
+As part of the PREACT research group we collect digital phenotypes in patients undergoing cognitive behavioral therapy for internalizing disorders. 
+In line with open science principles, we aim to make our data collection and processing as transparent as possible. 
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+On the following pages, you find a detailed documentation of the study procedures, data structure as well as preprocessing procedures.
+
+Please reach out to us if you have any questions or feedback!
+
+Leona Hammelrath, Tessa Meyer & Michal Lukomski

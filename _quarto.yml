@@ -24,8 +24,8 @@ website:
       - href: quarto/quick_overview.ipynb
         text: Quick overview
       - href: quarto/documentation.ipynb
-        text: Feature Database Documentation
-      - section: Pipelines preprocessing
+        text: Feature Documentation
+      - section: Preprocessing
         contents:
         - href: quarto/EMA preprocessing.ipynb
           text: EMA preprocessing
@@ -33,8 +33,7 @@ website:
           text: Passive preprocessing
         - href: quarto/ECG preprocessing.ipynb
           text: ECG preprocessing
-      - href: quarto/about.qmd
-        text: About
+
 
 format:
   html:
