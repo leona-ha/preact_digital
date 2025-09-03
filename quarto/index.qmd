@@ -1,12 +1,13 @@
 ---
-title: "PREACT-digital: Feature Documentation"
+title: "PREACT-digital Data Documentation"
 ---
 
 Welcome to PREACT-digital! 
 As part of the PREACT research group we collect digital phenotypes in patients undergoing cognitive behavioral therapy for internalizing disorders. 
 In line with open science principles, we aim to make our data collection and processing as transparent as possible. 
 
-On the following pages, you find a detailed documentation of the study procedures, data structure as well as preprocessing procedures.
+On the following pages, you find a detailed documentation of the study procedures, data structure as well as preprocessing procedures. 
+For further information you can read our ([study protocol](https://doi.org/10.1101/2025.03.14.25323957)).
 
 Please reach out to us if you have any questions or feedback!
 

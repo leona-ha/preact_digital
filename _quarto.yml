@@ -22,7 +22,7 @@ website:
       - href: quarto/index.qmd
         text: Home
       - href: quarto/quick_overview.ipynb
-        text: Quick overview
+        text: Study Overview
       - href: quarto/documentation.ipynb
         text: Feature Documentation
       - section: Preprocessing
