@@ -1,14 +1,33 @@
 ---
-title: "PREACT-digital Data Documentation"
+title: "PREACT-digital · Data Documentation"
+page-layout: article
+format:
+  html:
+    theme: cosmo
+    toc: false
+    smooth-scroll: true
+    anchor-sections: false
+editor: visual
 ---
 
-Welcome to PREACT-digital! 
-As part of the PREACT research group we collect digital phenotypes in patients undergoing cognitive behavioral therapy for internalizing disorders. 
-In line with open science principles, we aim to make our data collection and processing as transparent as possible. 
+Welcome to **PREACT-digital**!
 
-On the following pages, you find a detailed documentation of the study procedures, data structure as well as preprocessing procedures. 
-For further information you can read our ([study protocol](https://doi.org/10.1101/2025.03.14.25323957)).
+As part of the PREACT research group, we collect high-resolution digital phenotypes in patients undergoing cognitive behavioral therapy for internalizing disorders. In line with open-science principles, this site documents our study procedures, data structures, and preprocessing pipelines.
 
-Please reach out to us if you have any questions or feedback!
+::: {.callout-tip appearance="simple"}
+**Study protocol:** <https://doi.org/10.1101/2025.03.14.25323957>
+:::
 
-Leona Hammelrath, Tessa Meyer & Michal Lukomski
+### What you’ll find here
+- Study procedures and timelines  
+- Data structure (IDs, tables, joins, time zones)  
+- Preprocessing decisions and QA notes
+
+---
+
+## Contact
+Questions or feedback? We’re happy to hear from you.
+
+- Leona Hammelrath  
+- Tessa Meyer  
+- Michal Lukomski
