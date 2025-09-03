@@ -158,7 +158,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../quarto/quick_overview.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Quick overview</span></a>
+ <span class="menu-text">Study Overview</span></a>
   </div>
 </li>
         <li class="sidebar-item">
@@ -207,10 +207,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
    
   <ul>
   <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a></li>
-  <li><a href="#design" id="toc-design" class="nav-link" data-scroll-target="#design">Design</a>
-  <ul class="collapse">
-  <li><a href="#longitudinal-study-design-preact-digital" id="toc-longitudinal-study-design-preact-digital" class="nav-link" data-scroll-target="#longitudinal-study-design-preact-digital">Longitudinal study design (PREACT-digital)</a></li>
-  </ul></li>
   <li><a href="#data-structure" id="toc-data-structure" class="nav-link" data-scroll-target="#data-structure">Data Structure</a></li>
   <li><a href="#ema-data" id="toc-ema-data" class="nav-link" data-scroll-target="#ema-data">EMA Data</a>
   <ul class="collapse">
@@ -266,18 +262,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
-<p>Welcome to the documentation for the PREACT-digital study (<a href="https://doi.org/10.1101/2025.03.14.25323957">study protocol</a>).</p>
-</section>
-<section id="design" class="level2">
-<h2 class="anchored" data-anchor-id="design">Design</h2>
-<section id="longitudinal-study-design-preact-digital" class="level3">
-<h3 class="anchored" data-anchor-id="longitudinal-study-design-preact-digital">Longitudinal study design (PREACT-digital)</h3>
-<div class="quarto-figure quarto-figure-center">
-<figure class="figure">
-<p><img src="images/preact-digital_study-procedure_small.png" class="img-fluid figure-img" width="600"></p>
-<figcaption>Caption describing the figure</figcaption>
-</figure>
-</div>
+<p>In the following sections, you find an overview of our datasets on the study server as well as a detailed description of variables and constructs.</p>
 <hr>
 <div class="callout callout-style-default callout-tip callout-titled" title="Glossary">
 <div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="true" aria-label="Toggle callout">
@@ -292,19 +277,18 @@ Glossary
 <div id="callout-1" class="callout-1-contents callout-collapse collapse show">
 <div class="callout-body-container callout-body">
 <ul>
-<li><p><strong>beep</strong> =</p></li>
-<li><p><strong>measurement burst</strong> =</p></li>
-<li><p>…</p></li>
+<li><p><strong>beep</strong> = Timepoint where participants receive prompt to answer questions about their current mood, situation, etc.</p></li>
+<li><p><strong>measurement burst</strong> = Period (i.e.&nbsp;2 weeks) where participants receive regular EMA questionnaires</p></li>
+<li><p><strong>epoch</strong> = Highest granularity of passive data. Epoch length depends on data source (i.e.&nbsp;30 seconds for ECG data)</p></li>
 </ul>
 </div>
 </div>
 </div>
 </section>
-</section>
 <section id="data-structure" class="level2">
 <h2 class="anchored" data-anchor-id="data-structure">Data Structure</h2>
 <p><strong>Folder Structure on High Performance Cluster (HPC)</strong> [wip]</p>
-<div id="cell-7" class="cell">
+<div id="cell-5" class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>SP6<span class="op">/</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">|-</span> processed<span class="op">/</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>        <span class="op">|-</span> passive<span class="op">/</span></span>

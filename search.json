@@ -1,10 +1,30 @@
 [
   {
+    "objectID": "quarto/quick_overview.html",
+    "href": "quarto/quick_overview.html",
+    "title": "Study Overview",
+    "section": "",
+    "text": "Study design (PREACT-digital)\n\n\n\nStudy procedures for short and long study version",
+    "crumbs": [
+      "Study Overview"
+    ]
+  },
+  {
     "objectID": "quarto/index.html",
     "href": "quarto/index.html",
-    "title": "PREACT-digital: Feature Documentation",
+    "title": "PREACT-digital · Data Documentation",
     "section": "",
-    "text": "Welcome to PREACT-digital! As part of the PREACT research group we collect digital phenotypes in patients undergoing cognitive behavioral therapy for internalizing disorders. In line with open science principles, we aim to make our data collection and processing as transparent as possible.\nOn the following pages, you find a detailed documentation of the study procedures, data structure as well as preprocessing procedures.\nPlease reach out to us if you have any questions or feedback!\nLeona Hammelrath, Tessa Meyer & Michal Lukomski",
+    "text": "Welcome to PREACT-digital!\nAs part of the PREACT research group, we collect high-resolution digital phenotypes in patients undergoing cognitive behavioral therapy for internalizing disorders. In line with open-science principles, this site documents our study procedures, data structures, and preprocessing pipelines.",
+    "crumbs": [
+      "Home"
+    ]
+  },
+  {
+    "objectID": "quarto/index.html#contact",
+    "href": "quarto/index.html#contact",
+    "title": "PREACT-digital · Data Documentation",
+    "section": "Contact",
+    "text": "Contact\nQuestions or feedback? We’re happy to hear from you.\n\nLeona Hammelrath\n\nTessa Meyer\n\nMichal Lukomski",
     "crumbs": [
       "Home"
     ]
@@ -14,7 +34,7 @@
     "href": "quarto/documentation.html",
     "title": "PREACT-digital: Feature Database Documentation",
     "section": "",
-    "text": "Welcome to the documentation for the PREACT-digital study (study protocol).",
+    "text": "In the following sections, you find an overview of our datasets on the study server as well as a detailed description of variables and constructs.\n\n\n\n\n\n\n\nGlossary\n\n\n\n\n\n\nbeep = Timepoint where participants receive prompt to answer questions about their current mood, situation, etc.\nmeasurement burst = Period (i.e. 2 weeks) where participants receive regular EMA questionnaires\nepoch = Highest granularity of passive data. Epoch length depends on data source (i.e. 30 seconds for ECG data)",
     "crumbs": [
       "Feature Documentation"
     ]
@@ -24,17 +44,7 @@
     "href": "quarto/documentation.html#introduction",
     "title": "PREACT-digital: Feature Database Documentation",
     "section": "",
-    "text": "Welcome to the documentation for the PREACT-digital study (study protocol).",
-    "crumbs": [
-      "Feature Documentation"
-    ]
-  },
-  {
-    "objectID": "quarto/documentation.html#design",
-    "href": "quarto/documentation.html#design",
-    "title": "PREACT-digital: Feature Database Documentation",
-    "section": "Design",
-    "text": "Design\n\nLongitudinal study design (PREACT-digital)\n\n\n\nCaption describing the figure\n\n\n\n\n\n\n\n\n\nGlossary\n\n\n\n\n\n\nbeep =\nmeasurement burst =\n…",
+    "text": "In the following sections, you find an overview of our datasets on the study server as well as a detailed description of variables and constructs.\n\n\n\n\n\n\n\nGlossary\n\n\n\n\n\n\nbeep = Timepoint where participants receive prompt to answer questions about their current mood, situation, etc.\nmeasurement burst = Period (i.e. 2 weeks) where participants receive regular EMA questionnaires\nepoch = Highest granularity of passive data. Epoch length depends on data source (i.e. 30 seconds for ECG data)",
     "crumbs": [
       "Feature Documentation"
     ]
