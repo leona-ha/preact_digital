@@ -17,7 +17,6 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime
 from typing import Optional
 
 import numpy as np
@@ -29,7 +28,7 @@ import pyarrow.parquet as pq
 # Logging
 # ---------------------------------------------------------------------
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 # ---------------------------------------------------------------------
 # Pfade wie im Notebook
@@ -54,7 +53,7 @@ PATTERN_S3 = os.path.join(
     raw_path, "tiki_backup_files", "export_tiki_05052025", "epoch_part*.csv"
 )
 
-OUT_PARQUET = os.path.join(preprocessed_path, "backup_passive_05052025_temp.parquet")
+OUT_PARQUET = os.path.join(preprocessed_path, "backup_passive_05052025.parquet")
 
 SCHEMA = [
     "customer",
@@ -72,12 +71,12 @@ SCHEMA = [
 # Timestamps are tz‑aware UTC now
 PA_SCHEMA = pa.schema(
     [
-        pa.field("customer", pa.string()),
+        pa.field("customer", pa.dictionary(pa.int64(), pa.utf8())),
         pa.field("startTimestamp", pa.timestamp("ns", tz="UTC")),
         pa.field("endTimestamp", pa.timestamp("ns", tz="UTC")),
         pa.field("timezoneOffset", pa.int32()),
-        pa.field("type", pa.string()),
-        pa.field("stringValue", pa.string()),
+        pa.field("type", pa.dictionary(pa.int64(), pa.utf8())),
+        pa.field("stringValue", pa.utf8()),
         pa.field("booleanValue", pa.bool_()),
         pa.field("doubleValue", pa.float64()),
         pa.field("longValue", pa.float64()),
@@ -97,6 +96,10 @@ def epoch_to_utc(series: pd.Series) -> pd.Series:
     """Convert epoch milliseconds to **tz‑aware UTC**; invalid values → NaT."""
     vals = pd.to_numeric(series, errors="coerce").astype("float64")
     mask = np.isfinite(vals) & (vals >= 0) & (vals <= MAX_MS)
+    if (vals < 0).any():
+        logging.warning(f"[EPOCH] negative timestamps → NaT: {series[vals < 0].unique()}")
+    if (vals > MAX_MS).any():
+        logging.warning(f"[EPOCH] too large timestamps → NaT: {series[vals > MAX_MS].unique()}")
 
     # Pre‑allocate a tz‑aware destination Series
     out = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns, UTC]")
@@ -169,7 +172,7 @@ def write_df(df: pd.DataFrame) -> None:
 
     parquet_writer.write_table(table)
 
-
+# %%
 # ---------------------------------------------------------------------
 # BIG verarbeiten (ISO → UTC)
 # ---------------------------------------------------------------------
