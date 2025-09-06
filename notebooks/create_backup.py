@@ -11,22 +11,25 @@ Changes compared with the previous version
 * Helper functions `epoch_to_utc` and `parse_iso_utc` simplified—no
   `.dt.tz_localize(None)` calls.
 """
-
-import os, sys, re, glob
-import pandas as pd
-import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
+# %%
+import glob
+import logging
+import os
+import re
+import sys
 from datetime import datetime
 from typing import Optional
+
+import numpy as np
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 # ---------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------
 
-def log(msg: str) -> None:
-    """Print a timestamped log line to stdout."""
-    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
 # ---------------------------------------------------------------------
 # Pfade wie im Notebook
@@ -38,7 +41,7 @@ for p in (BASE_DIR, SRC_DIR):
     if p not in sys.path:
         sys.path.append(p)
 
-from server_config import raw_path, backup_path, preprocessed_path  # noqa: E402
+from server_config import backup_path, preprocessed_path, raw_path  # noqa: E402
 
 PATTERN_BIG = os.path.join(backup_path, "first_backup", "tiki_backup_*.csv")
 PATTERN_S1 = os.path.join(
@@ -51,7 +54,7 @@ PATTERN_S3 = os.path.join(
     raw_path, "tiki_backup_files", "export_tiki_05052025", "epoch_part*.csv"
 )
 
-OUT_PARQUET = os.path.join(preprocessed_path, "backup_passive_05052025.parquet")
+OUT_PARQUET = os.path.join(preprocessed_path, "backup_passive_05052025_temp.parquet")
 
 SCHEMA = [
     "customer",
@@ -63,6 +66,7 @@ SCHEMA = [
     "booleanValue",
     "doubleValue",
     "longValue",
+    "createdAt",
 ]
 
 # Timestamps are tz‑aware UTC now
@@ -77,6 +81,8 @@ PA_SCHEMA = pa.schema(
         pa.field("booleanValue", pa.bool_()),
         pa.field("doubleValue", pa.float64()),
         pa.field("longValue", pa.float64()),
+        pa.field("createdAt", pa.timestamp("ns", tz="UTC")), # !
+        # pa.field("createdAt", pa.string()),
     ]
 )
 
@@ -133,6 +139,7 @@ def ensure_schema(df: pd.DataFrame) -> pd.DataFrame:
 
     return df[SCHEMA]
 
+# %%
 # ---------------------------------------------------------------------
 # Writer / Zustand
 # ---------------------------------------------------------------------
@@ -158,7 +165,7 @@ def write_df(df: pd.DataFrame) -> None:
         parquet_writer = pq.ParquetWriter(
             OUT_PARQUET, table.schema, compression="snappy"
         )
-        log(f"[WRITE] opened {OUT_PARQUET}")
+        logging.info(f"[WRITE] opened {OUT_PARQUET}")
 
     parquet_writer.write_table(table)
 
@@ -176,7 +183,7 @@ big_files = sorted(
     or (pd.Timestamp.min, 0),
 )
 
-log(f"[BIG] {len(big_files)} Dateien")
+logging.info(f"[BIG] {len(big_files)} Dateien")
 for f in big_files:
     for chunk in pd.read_csv(
         f,
@@ -186,6 +193,8 @@ for f in big_files:
     ):
         chunk["startTimestamp"] = parse_iso_utc(chunk["startTimestamp"])
         chunk["endTimestamp"] = parse_iso_utc(chunk["endTimestamp"])
+        # "createdAt" is not in these files
+
         for c in (
             "timezoneOffset",
             "type",
@@ -207,15 +216,16 @@ for f in big_files:
                 last_ts = m
 
 last_dataset = "BIG"
-log(f"[BIG DONE] last_ts={last_ts}")
+logging.info(f"[BIG DONE] last_ts={last_ts}")
 
+# %%
 # ---------------------------------------------------------------------
 # SMALL‑Datasets – Epoch ms → UTC
 # ---------------------------------------------------------------------
 
 for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3)]:
     files = sorted(glob.glob(pattern))
-    log(f"[{label}] {len(files)} Dateien")
+    logging.info(f"[{label}] {len(files)} Dateien")
 
     prev_last_ts = last_ts
     first_raw: Optional[pd.Timestamp] = None
@@ -228,6 +238,7 @@ for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3
         ):
             chunk["startTimestamp"] = epoch_to_utc(chunk["startTimestamp"])
             chunk["endTimestamp"] = epoch_to_utc(chunk["endTimestamp"])
+            chunk["createdAt"] = epoch_to_utc(chunk["createdAt"])
 
             if "timezoneOffset" not in chunk:
                 chunk["timezoneOffset"] = pd.NA
@@ -274,7 +285,7 @@ for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3
                     last_ts = m
 
     if last_dataset is not None and label != last_dataset:
-        log(
+        logging.info(
             f"[BOUNDARY] {last_dataset} -> {label}: "
             f"prev_last_ts={prev_last_ts}; first_raw_new_df={first_raw}; "
             f"first_written={first_written}; new_last_ts={last_ts}; "
@@ -285,9 +296,12 @@ for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3
 # ---------------------------------------------------------------------
 # Abschluss
 # ---------------------------------------------------------------------
-
+# %%
 if parquet_writer is not None:
     parquet_writer.close()
-    log(f"[DONE] last_ts={last_ts} -> {OUT_PARQUET}")
+    logging.info(f"[DONE] last_ts={last_ts} -> {OUT_PARQUET}")
 else:
-    log("[WARN] nothing written")
+    logging.info("[WARN] nothing written")
+
+
+# %%
