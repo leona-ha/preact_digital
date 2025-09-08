@@ -44,9 +44,9 @@ google-pasta==0.2.0
 # graphviz @ file:///home/conda/feedstock_root/build_artifacts/python-graphviz_1733791968395/work
 graphviz
 grpcio==1.69.0
-h11==0.14.0
+h11>=0.16.0
 h5py==3.12.1
-httpcore==1.0.7
+httpcore>=1.0.7
 httpx==0.28.1
 idna==3.10
 imbalanced-learn==0.12.4
