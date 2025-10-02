@@ -37,3 +37,9 @@
   border-radius: 6px 6px 0 0; /* Rounded top corners */
 }
 
+/* Make the content centered on larger screens */
+.quarto-container {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
