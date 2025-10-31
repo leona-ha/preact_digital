@@ -148,7 +148,7 @@ class Config:
 
 embedding_model = KerasFFNNRegressor(
             sensor_feature_dim=None,  # Let the model infer: input will be (n_features, ) + user col.
-            num_users=158,
+            num_users=228,
             embedding_dim=32,
             hidden_units=(64, 32),
             epochs=20,
@@ -158,7 +158,7 @@ embedding_model = KerasFFNNRegressor(
 )
 plain_ffnn_model = KerasFFNNRegressor(
             sensor_feature_dim=None,  # Will be inferred from X (all columns are sensor features)
-            num_users=158,            # Irrelevant when use_embedding=False
+            num_users=228,            # Irrelevant when use_embedding=False
             embedding_dim=32,         # Ignored when use_embedding is False
             hidden_units=(64, 32),
             epochs=15,
