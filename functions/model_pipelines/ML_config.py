@@ -68,12 +68,7 @@ class Config:
     SKEWED_FEATURES = [
         'age', 'hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_zone_resting',
         'hr_zone_moderate', 'hr_zone_vigorous', 'n_steps', 'n_GPS',
-        'total_distance_km', 'at_home_minute', 'time_in_transition_minutes',
-        'time_stationary_minutes', 'activity_102_minutes', 'activity_103_minutes',
-        'activity_104_minutes', 'activity_105_minutes', 'activity_106_minutes',
-        'activity_107_minutes', 'sunshine_duration', 'precipitation_hours'
-    ]
-
+         'sunshine_duration', 'precipitation_hours','total_distance_km', 'at_home_minute', 'time_in_transition_minutes','time_stationary_minutes', 'activity_102_minutes', 'activity_103_minutes','activity_104_minutes', 'activity_105_minutes', 'activity_106_minutes','activity_107_minutes']
     # 4) Feature Groups
     numeric_features = SKEWED_FEATURES + ['apparent_temperature_mean']
     binary_features = ['somatic_problems', 'psychotropic', 'ema_smartphone', 'weekend']
@@ -87,6 +82,7 @@ class Config:
     'season': ['Fall', 'Spring', 'Summer', 'Winter'],
     'time_of_day': ['Afternoon', 'Early Morning', 'Evening', 'Morning', 'Night'],
     'employability_description_simple': ['no', 'yes']
+    
 }
 
     person_static_features = [
@@ -96,10 +92,8 @@ class Config:
     merf_cols = ["customer","intercept"]
     passive_cols = ['hr_mean', 'hr_min', 'hr_max', 'hr_std', 'hr_zone_resting',
         'hr_zone_moderate', 'hr_zone_vigorous', 'n_steps', 'n_GPS',
-        'total_distance_km', 'at_home_minute', 'time_in_transition_minutes',
-        'time_stationary_minutes', 'activity_102_minutes', 'activity_103_minutes',
-        'activity_104_minutes', 'activity_105_minutes', 'activity_106_minutes',
-        'activity_107_minutes', 'sunshine_duration', 'precipitation_hours', 'apparent_temperature_mean', 'weekend', 'weekday','quest_create_hour', 'season', 'time_of_day']
+        'sunshine_duration', 'precipitation_hours', 'apparent_temperature_mean', 'weekend', 'weekday','quest_create_hour', 'season', 'time_of_day'
+    ,'total_distance_km', 'at_home_minute', 'time_in_transition_minutes','time_stationary_minutes', 'activity_102_minutes', 'activity_103_minutes','activity_104_minutes', 'activity_105_minutes', 'activity_106_minutes','activity_107_minutes']
 
     # 5) Feature Types (used during preprocessing)
     FEATURE_TYPES = {
@@ -201,8 +195,8 @@ Regression_model_settings = {
             ("keras_model", embedding_model)
         ]),
         {
-           "keras_model__embedding_dim": [8,16,32],
-            "keras_model__hidden_units": [(64, 32),(128, 64), (128, 64, 32)],
+           "keras_model__embedding_dim": [2,4,6],
+            "keras_model__hidden_units": [(64, 32),(128, 64),(64,32,128)],
             "keras_model__batch_size": [64],
         }),
 
@@ -281,8 +275,8 @@ Regression_model_settings = {
             ))
         ]),
         {
-            "model_MERF__regressor__max_iterations": [10,15],
-            "model_MERF__regressor__rf__n_estimators": [50, 100]
+            "model_MERF__regressor__max_iterations": [15,20,25],
+            "model_MERF__regressor__rf__n_estimators": [50, 100, 150]
         }
     ),
     "MERF_with_PS": (
@@ -296,8 +290,8 @@ Regression_model_settings = {
             ))
         ]),
         {
-            "model_MERF__regressor__max_iterations": [10,15],
-            "model_MERF__regressor__rf__n_estimators": [50, 100]
+            "model_MERF__regressor__max_iterations": [10,15,20],
+            "model_MERF__regressor__rf__n_estimators": [25,50, 100]
         }
     ),
     

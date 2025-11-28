@@ -583,25 +583,32 @@ class MLpipeline:
             # --- Adaptation evaluation ---
             user_adapt_results = {}
             if "Embeddings" in pipeline_name:
+                user_adapt_results = {}
+                all_y_true = []
+                all_y_pred = []
+            
                 # For FFNN_with_Embeddings: use a partial pipeline (all steps except final keras_model)
                 if len(model.steps) < 2:
                     self.logger.error(f"[{pipeline_name}] Not enough steps to build partial pipeline.")
                     adaptation_results[pipeline_name] = {}
                     continue
+            
                 partial_pipeline = Pipeline(model.steps[:-1])
+            
                 # Try to get the encoder from the split_features transformer.
                 try:
                     user_encoder = model.named_steps["split_features"].encoder
                 except Exception as e:
                     self.logger.error(f"[{pipeline_name}] Could not obtain encoder: {e}")
                     user_encoder = None
-                
+            
                 for user_id, group in self.df_holdout.groupby(self.cfg.USER_COL):
                     group_sorted = group.sort_values(by=self.cfg.TIME_COL)
                     n = len(group_sorted)
                     self.logger.info(f"User {user_id} has {n} samples.")
                     if n < 5:
                         continue
+            
                     split_idx = int(0.8 * n)
                     try:
                         X_adapt_raw = group_sorted.iloc[:split_idx].loc[:, feature_cols]
@@ -609,104 +616,309 @@ class MLpipeline:
                         X_test_raw = group_sorted.iloc[split_idx:].loc[:, feature_cols]
                         y_test = group_sorted.iloc[split_idx:][self.cfg.LABEL_COL]
                     except Exception as e:
-                        self.logger.error(f"[{pipeline_name}] Error slicing adaptation data for user {user_id}: {e}")
+                        self.logger.error(
+                            f"[{pipeline_name}] Error slicing adaptation data for user {user_id}: {e}"
+                        )
                         continue
+            
+                    # ---- Transform features through preprocessor + split_features ----
                     try:
                         X_adapt = partial_pipeline.transform(X_adapt_raw)
                         X_test = partial_pipeline.transform(X_test_raw)
-                        self.logger.info(f"[{pipeline_name}] Transformed adaptation shape for user {user_id}: {X_adapt.shape}")
+                        self.logger.info(
+                            f"[{pipeline_name}] Transformed adaptation shape for user {user_id}: {X_adapt.shape}"
+                        )
                         if isinstance(X_adapt, np.ndarray) and X_adapt.shape[1] > 0:
-                            self.logger.info(f"[{pipeline_name}] First 5 values in transformed user column for user {user_id}: {X_adapt[:, -1][:5]}")
+                            self.logger.info(
+                                f"[{pipeline_name}] First 5 values in transformed last column "
+                                f"for user {user_id}: {X_adapt[:, -1][:5]}"
+                            )
                         else:
-                            self.logger.error(f"[{pipeline_name}] Transformed adaptation output is not a NumPy array.")
+                            self.logger.error(
+                                f"[{pipeline_name}] Transformed adaptation output is not a NumPy array."
+                            )
                     except Exception as e:
-                        self.logger.error(f"[{pipeline_name}] Error during partial pipeline transform for user {user_id}: {e}")
+                        self.logger.error(
+                            f"[{pipeline_name}] Error during partial pipeline transform for user {user_id}: {e}"
+                        )
                         continue
+            
+                    # ---- Overwrite user column with encoded user index ----
                     try:
-                        # Use the encoder to obtain the encoded user index.
                         if user_encoder is not None:
                             unique_user_val = int(user_encoder.transform([user_id])[0])
                         else:
-                            # Fallback if no encoder: you might want to raise an error.
-                            unique_user_val = 143  
-                        # Overwrite the last column with the encoded value.
+                            # If encoder is missing, fall back to a fixed index or raise
+                            unique_user_val = 0
+            
                         X_adapt[:, -1] = unique_user_val
                         X_test[:, -1] = unique_user_val
-                        self.logger.info(f"[{pipeline_name}] Overwrote user column with encoded value {unique_user_val} for user {user_id}.")
+                        self.logger.info(
+                            f"[{pipeline_name}] Overwrote user column with encoded value "
+                            f"{unique_user_val} for user {user_id}."
+                        )
                     except Exception as e:
-                        self.logger.error(f"[{pipeline_name}] Error overwriting user column for user {user_id}: {e}")
+                        self.logger.error(
+                            f"[{pipeline_name}] Error overwriting user column for user {user_id}: {e}"
+                        )
                         continue
+            
+                    # ---- Clone base model and adapt embedding for this user ----
                     try:
                         base_model = model.named_steps["keras_model"].model_
                         adapted_model = tf.keras.models.clone_model(base_model)
                         adapted_model.set_weights(base_model.get_weights())
-                        # Freeze all layers except embedding layers.
+            
+                        # Freeze all layers except embedding layers
                         for layer in adapted_model.layers:
                             if "embedding" not in layer.name.lower():
                                 layer.trainable = False
                             self.logger.info(f"Layer: {layer.name}, trainable: {layer.trainable}")
+            
                         adapted_model.compile(
                             optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
                             loss="mean_squared_error",
-                            metrics=["mae"]
+                            metrics=["mae"],
                         )
+            
                         adapted_model.fit(
-                            X_adapt, y_adapt,
+                            X_adapt,
+                            y_adapt,
                             epochs=20,
                             batch_size=model.named_steps["keras_model"].batch_size,
-                            verbose=0
+                            verbose=0,
                         )
+            
                         y_pred_adapt = adapted_model.predict(X_test).ravel()
                     except Exception as e:
-                        self.logger.error(f"[{pipeline_name}] Error during adaptation for user {user_id}: {e}")
+                        self.logger.error(
+                            f"[{pipeline_name}] Error during adaptation for user {user_id}: {e}"
+                        )
                         continue
+            
+                    # ---- Per-user metrics ----
                     user_scores = {
                         "r2": r2_score(y_test, y_pred_adapt),
                         "mae": mean_absolute_error(y_test, y_pred_adapt),
                         "rmse": np.sqrt(mean_squared_error(y_test, y_pred_adapt)),
                         "n_adapt": len(X_adapt),
-                        "n_test": len(X_test)
+                        "n_test": len(X_test),
                     }
                     user_adapt_results[user_id] = user_scores
+            
+                    # Collect for aggregated (global) scores
+                    all_y_true.append(y_test.values)
+                    all_y_pred.append(y_pred_adapt)
+            
+                # store per-user results
                 adaptation_results[pipeline_name] = user_adapt_results
+            
+                # ---- Aggregate across users and overwrite holdout_scores ----
+                if all_y_true:
+                    y_true_all = np.concatenate(all_y_true)
+                    y_pred_all = np.concatenate(all_y_pred)
+            
+                    adapt_scores = {
+                        "r2": r2_score(y_true_all, y_pred_all),
+                        "mae": mean_absolute_error(y_true_all, y_pred_all),
+                        "rmse": np.sqrt(mean_squared_error(y_true_all, y_pred_all)),
+                    }
+                    self.logger.info(
+                        f"[{pipeline_name}] Aggregated adaptation scores on holdout: {adapt_scores}"
+                    )
+            
+                    # Overwrite baseline holdout scores for this pipeline with adapted scores
+                    for h in holdout_results:
+                        if h["pipeline_name"] == pipeline_name:
+                            h["holdout_scores"] = adapt_scores
+                            break
+
     
             elif "PerUser_Intercept" in pipeline_name:
                 user_adapt_results = {}
+                all_y_true = []
+                all_y_pred = []
+            
                 for user_id, group in self.df_holdout.groupby(self.cfg.USER_COL):
                     group_sorted = group.sort_values(by=self.cfg.TIME_COL)
                     n = len(group_sorted)
                     self.logger.info(f"User {user_id} has {n} samples.")
                     if n < 5:
                         continue
+            
                     split_idx = int(0.8 * n)
                     try:
+                        # we don't actually use X_* here, but fine to keep for symmetry
                         X_adapt = group_sorted.iloc[:split_idx][feature_cols]
                         y_adapt = group_sorted.iloc[:split_idx][self.cfg.LABEL_COL]
-                        X_test = group_sorted.iloc[split_idx:][feature_cols]
-                        y_test = group_sorted.iloc[split_idx:][self.cfg.LABEL_COL]
+                        X_test  = group_sorted.iloc[split_idx:][feature_cols]
+                        y_test  = group_sorted.iloc[split_idx:][self.cfg.LABEL_COL]
                     except Exception as e:
-                        self.logger.error(f"[{pipeline_name}] Error slicing adaptation data for user {user_id}: {e}")
+                        self.logger.error(
+                            f"[{pipeline_name}] Error slicing adaptation data for user {user_id}: {e}"
+                        )
                         continue
+            
                     try:
+                        # simple per-user intercept: mean of adaptation window
                         user_prediction = y_adapt.mean()
-                        y_pred_adapt = np.full(y_test.shape, user_prediction)
+                        y_pred_adapt = np.full_like(y_test.values, user_prediction, dtype=float)
                     except Exception as e:
-                        self.logger.error(f"[{pipeline_name}] Error during adaptation for user {user_id}: {e}")
+                        self.logger.error(
+                            f"[{pipeline_name}] Error during adaptation for user {user_id}: {e}"
+                        )
                         continue
+            
+                    # collect for global metrics
+                    all_y_true.append(y_test.values)
+                    all_y_pred.append(y_pred_adapt)
+            
+                    # per-user metrics
                     user_scores = {
                         "r2": r2_score(y_test, y_pred_adapt),
                         "mae": mean_absolute_error(y_test, y_pred_adapt),
                         "rmse": np.sqrt(mean_squared_error(y_test, y_pred_adapt)),
                         "n_adapt": len(y_adapt),
-                        "n_test": len(y_test)
+                        "n_test": len(y_test),
                     }
                     user_adapt_results[user_id] = user_scores
+            
+                # store full per-user dict as before
                 adaptation_results[pipeline_name] = user_adapt_results
-    
-            self.logger.info(f"Adaptation Results for {pipeline_name}: {adaptation_results.get(pipeline_name)}")
+            
+                # NEW: aggregate across users and overwrite holdout_scores
+                if all_y_true:
+                    y_true_all = np.concatenate(all_y_true)
+                    y_pred_all = np.concatenate(all_y_pred)
+            
+                    adapt_scores = {
+                        "r2": r2_score(y_true_all, y_pred_all),
+                        "mae": mean_absolute_error(y_true_all, y_pred_all),
+                        "rmse": np.sqrt(mean_squared_error(y_true_all, y_pred_all)),
+                    }
+                    self.logger.info(
+                        f"[{pipeline_name}] Aggregated adaptation scores on holdout: {adapt_scores}"
+                    )
+            
+                    # overwrite the baseline (non-adapted) holdout scores for this pipeline
+                    for h in holdout_results:
+                        if h["pipeline_name"] == pipeline_name:
+                            h["holdout_scores"] = adapt_scores
+                            break
+            
+            self.logger.info(
+                f"Adaptation Results for {pipeline_name}: {adaptation_results.get(pipeline_name)}"
+            )
+
         
         return holdout_results, adaptation_results
 
+    def _make_outcome_summary(self, results_timebased, holdout_results, outcome):
+        """
+        Build one tidy summary table for a single outcome, keyed by pipeline.
+        """
+        hold_map = {h["pipeline_name"]: h["holdout_scores"] for h in holdout_results}
+        rows = []
+        for r in results_timebased:
+            pname = r["pipeline_name"]
+            inner = r["inner_test_scores"]
+            hold  = hold_map.get(pname, {})
+            rows.append({
+                "outcome": outcome,
+                "pipeline": pname,
+                "cv_refit_best": r.get("best_cv_score", np.nan),
+                "inner_r2": inner.get("r2", np.nan),
+                "inner_mae": inner.get("mae", np.nan),
+                "inner_rmse": inner.get("rmse", np.nan),
+                "holdout_r2": hold.get("r2", np.nan),
+                "holdout_mae": hold.get("mae", np.nan),
+                "holdout_rmse": hold.get("rmse", np.nan),
+            })
+        df = pd.DataFrame(rows)
+        # Sort by best (lowest) holdout RMSE; fallback to inner RMSE if holdout missing
+        df["sort_key"] = df["holdout_rmse"].fillna(df["inner_rmse"])
+        df = df.sort_values(["outcome", "sort_key", "pipeline"]).drop(columns="sort_key")
+        return df
+
+    def run_for_outcomes(
+        self,
+        outcomes,
+        pipeline_grid_dict,
+        task_type="regression",
+        scoring=custom_scorers,
+        refit="mae",
+        do_final_refit=True,
+        fail_on_missing=True,
+    ):
+        """
+        Run the full CV → inner-test → holdout evaluation *once per outcome*.
+
+        Returns
+        -------
+        all_runs : list of dicts
+            [
+              {
+                'outcome': <str>,
+                'results_timebased': [...],
+                'holdout_results': [...],
+                'adaptation_results': {...}
+              },
+              ...
+            ]
+        summary : pd.DataFrame
+            Tidy table with metrics per outcome × pipeline.
+        """
+        if isinstance(outcomes, str):
+            outcomes = [outcomes]
+
+        all_runs = []
+        summary_frames = []
+
+        for outcome in outcomes:
+            if fail_on_missing and (outcome not in self.df_all.columns):
+                self.logger.error(f"[run_for_outcomes] Outcome '{outcome}' not found in data columns.")
+                raise KeyError(f"Outcome '{outcome}' not in DataFrame.")
+            elif outcome not in self.df_all.columns:
+                self.logger.warning(f"[run_for_outcomes] Skipping missing outcome '{outcome}'.")
+                continue
+
+            # Update config label for this pass
+            self.cfg.LABEL_COL = outcome
+            if "neg_affect_regression" in self.cfg.ANALYSIS:
+                self.cfg.ANALYSIS["neg_affect_regression"]["LABEL"] = outcome
+
+            self.logger.info(f"\n==============================")
+            self.logger.info(f" Running pipeline for outcome: {outcome}")
+            self.logger.info(f"==============================")
+
+            # Re-use the same splits; label usage is internal to .run()
+            results_timebased, holdout_results, adaptation_results = self.run(
+                pipeline_grid_dict=pipeline_grid_dict,
+                task_type=task_type,
+                scoring=scoring,
+                refit=refit,
+                do_final_refit=do_final_refit
+            )
+
+            # tag outcome into the dicts (handy if you inspect them later)
+            for r in results_timebased:
+                r["outcome"] = outcome
+            for h in holdout_results:
+                h["outcome"] = outcome
+
+            # Build one summary frame for this outcome
+            df_one = self._make_outcome_summary(results_timebased, holdout_results, outcome)
+            summary_frames.append(df_one)
+
+            all_runs.append({
+                "outcome": outcome,
+                "results_timebased": results_timebased,
+                "holdout_results": holdout_results,
+                "adaptation_results": adaptation_results
+            })
+
+        summary = pd.concat(summary_frames, axis=0).reset_index(drop=True) if summary_frames else pd.DataFrame()
+        return all_runs, summary
 
 
     ##########################################################################
