@@ -227,7 +227,7 @@ def compute_sleep_sessions(
     # Step 8: Additional session-level features
     # assign the day of the sleep session based on the wake up day (local)
     df_sleep_sessions["day"] = df_sleep_sessions["local_end_time"].dt.date
-    df_sleep_sessions["n_sessions_per_day"] = df_sleep_sessions.groupby(
+    df_sleep_sessions["num_sessions_in_day"] = df_sleep_sessions.groupby(
         ["customer", "day"]
     )["sleep_session_id"].transform("count")
 
