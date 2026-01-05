@@ -1,6 +1,12 @@
 project:
   type: website
   output-dir: _site
+  render:
+    - "quarto/*.qmd"
+    - "quarto/*.ipynb"
+    - "code/notebooks/*.ipynb"
+    - "!code/notebooks/er_aggregation.ipynb"
+
 
 website:
   title: "FOR5187 | PREACT"
@@ -16,10 +22,10 @@ website:
       - href: quarto/index.qmd
         text: Home
       - href: quarto/quick_overview.ipynb
-        text: Quick overview
+        text: Study Overview
       - href: quarto/documentation.ipynb
-        text: Feature Database Documentation
-      - section: Pipelines preprocessing
+        text: Feature Documentation
+      - section: Preprocessing
         contents:
         - href: quarto/EMA preprocessing.ipynb
           text: EMA preprocessing
@@ -27,8 +33,7 @@ website:
           text: Passive preprocessing
         - href: quarto/ECG preprocessing.ipynb
           text: ECG preprocessing
-      - href: quarto/about.qmd
-        text: About
+
 
 format:
   html:
@@ -40,6 +45,3 @@ format:
     # number-sections: true
 
 
-render:
-    - "**/*"                                # render everthing
-    - "!notebooks/er_aggregation.ipynb"     # _except this file         
