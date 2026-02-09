@@ -2,6 +2,9 @@
 import logging
 
 import pandas as pd
+import numpy as np
+import pandas as pd
+from typing import Iterable, Optional
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -21,15 +24,43 @@ def midnight_timestamp_to_berlin_tzoffset(ts):
 
 
 # %%
-def create_utcday_tzoffset_df(df: pd.DataFrame) -> pd.DataFrame:
+
+import pandas as pd
+
+
+import logging
+import pandas as pd
+
+
+def create_utcday_tzoffset_df(
+    df: pd.DataFrame,
+    customer_col: str = "customer",
+    startTimestamp_col: str = "startTimestamp",
+    timezoneOffset_col: str = "timezoneOffset",
+    type_col: str = "type",
+    createdAt_col: str = "createdAt",
+) -> pd.DataFrame:
     """Create a DataFrame with inferred timezone offsets for each customer and day.
     It assumes the specific structure of the input DataFrame."""
     # TODO might utilize something like ffill if the current implementation is too slow
     # %%
     # df = df.drop(columns=["stringValue", "doubleValue", "longValue", "booleanValue"]).copy()
-    df = df[
-        ["customer", "startTimestamp", "timezoneOffset", "type", "createdAt"]
-    ].copy()
+
+    # --- ONLY CHANGE: make input column names configurable, then normalize to canonical names ---
+    df = df[[customer_col, startTimestamp_col, timezoneOffset_col, type_col, createdAt_col]].copy()
+
+    rename_map = {
+        customer_col: "customer",
+        startTimestamp_col: "startTimestamp",
+        timezoneOffset_col: "timezoneOffset",
+        type_col: "type",
+        createdAt_col: "createdAt",
+    }
+    # avoid redundant self-maps
+    rename_map = {k: v for k, v in rename_map.items() if k != v}
+    if rename_map:
+        df = df.rename(columns=rename_map)
+    # --- END ONLY CHANGE ---
 
     df["startTimestamp_day"] = df["startTimestamp"].dt.floor("D")
     df["createdAt_day"] = df["createdAt"].dt.floor("D")
@@ -202,9 +233,6 @@ def create_utcday_tzoffset_df(df: pd.DataFrame) -> pd.DataFrame:
         # Handle cases based on validity
         if not prev_valid and not next_valid:
             if prev_available is None and next_available is None:
-                # logging.warning(
-                #     f"No neighbors for customer {row.customer} at {row.startTimestamp_day} with tzs {potential_tzs}"
-                # )
                 return None, "no_previous_no_next"
             else:
                 return (
@@ -242,9 +270,7 @@ def create_utcday_tzoffset_df(df: pd.DataFrame) -> pd.DataFrame:
         days_to_prev = (row.startTimestamp_day - prev_available.startTimestamp_day).days
         days_to_next = (next_available.startTimestamp_day - row.startTimestamp_day).days
 
-        if (
-            days_to_prev <= days_to_next or prefer_previous_than_distance
-        ):  # Prefer previous on tie
+        if days_to_prev <= days_to_next or prefer_previous_than_distance:
             return (
                 prev_available.return_tz,
                 f"inferred_from_previous_{days_to_prev}d"
@@ -311,21 +337,9 @@ def create_utcday_tzoffset_df(df: pd.DataFrame) -> pd.DataFrame:
             )
 
     # %%
-    # these customers still need adjustment
-    # df[df.customer == '3oNs'] # only one day, no gps
-    # df[df.customer == '9nSQ'] # only for one day, just one ECG recording
-    # df[df.customer == 'INjr'] # only two days, two ECG sessions and that's it
-    # df[df.customer == 'LEgz'] # only 10 days, mostly running sessions
-    # df[df.customer == 'SssR'] # data for one month 2023-05 -- 2023-06, no gps activitytypedetails without createdAt
-    # df[df.customer == 'Zv6E'] # data for two months 2023-09 -- 2023-11, no gps, activitytypedetails without createdAt
-
-    # %%
     # fill the other with berlin timezone
     still_missing_mask = df_tz.return_tz.isna()
     if still_missing_mask.any():
-        # add 12 hours to make the dst change day count towards the next offset
-        # this make only one hour difference compared to true dst change (1->2 vs 2->3)
-        # ! there might be some problems if the local time is read with tz
         df_tz.loc[still_missing_mask, "return_tz"] = (
             df_tz.loc[still_missing_mask, "startTimestamp_day"] + pd.Timedelta(hours=12)
         ).dt.tz_convert("Europe/Berlin").map(
@@ -343,13 +357,15 @@ def create_utcday_tzoffset_df(df: pd.DataFrame) -> pd.DataFrame:
 
     df_tz = df_tz.rename(
         columns={
+            "customer": "id",
             "startTimestamp_day": "day",
             "return_tz": "inferred_tzoffset",
             "return_source": "inferred_tzoffset_source",
         }
     )
-    df_tz = df_tz[["customer", "day", "inferred_tzoffset", "inferred_tzoffset_source"]]
+    df_tz = df_tz[["id", "day", "inferred_tzoffset", "inferred_tzoffset_source"]]
     return df_tz
+
 
 
 def merge_fill_tz(df, df_tz, day_col="quest_create_day", customer_col="customer"):
