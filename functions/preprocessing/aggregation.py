@@ -63,9 +63,9 @@ def compute_sleep_sessions(
         .agg(
             {
                 "startTimestamp": "first",
-                "endTimestamp": "last",
+                "endTimestamp": "last",  # TODO change to max ?
                 "local_start_time": "first",
-                "local_end_time": "last",
+                "local_end_time": "last",  #! and here
             }
         )
         .reset_index()
@@ -468,7 +468,7 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
     return df_sleep_daily
 
 
-def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100)):
+def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=False):
     """
     Aggregate heart rate data to daily level.
 
@@ -478,6 +478,8 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100)):
         Raw backup data with HeartRate records
     zone_thresholds : tuple
         (resting_upper, vigorous_lower) thresholds for HR zones
+    include_zero_hours : bool
+        Whether to include hours with zero records when computing per-hour stats
 
     Returns
     -------
@@ -501,6 +503,28 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100)):
         .astype(int)
     )
     df = df[df["duration"] > 0]  # Remove zero-duration records
+
+    # Record-level daily coverage (pre-expansion)
+    df["local_day"] = df["local_start_time"].dt.floor("D")
+    df["local_hour"] = df["local_start_time"].dt.floor("h")
+
+    df_hr_raw_daily = (
+        df.groupby(["customer", "local_day"], observed=True)
+        .size()
+        .reset_index(name="HR_raw_records")
+    )
+
+    df_hr_raw_hourly = (
+        df.groupby(["customer", "local_day", "local_hour"], observed=True)
+        .size()
+        .reset_index(name="HR_raw_records_in_hour")
+    )
+
+    df_hr_raw_hours_with_records = (
+        df_hr_raw_hourly.groupby(["customer", "local_day"], observed=True)["local_hour"]
+        .nunique()
+        .reset_index(name="HR_raw_hours_with_records")
+    )
 
     # Expand rows
     df_expanded = df.loc[df.index.repeat(df["duration"])].copy()
@@ -531,6 +555,24 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100)):
 
     # Add local day
     df_avg["local_day"] = df_avg["local_timestamp"].dt.floor("D")
+    df_avg["local_hour"] = df_avg["local_timestamp"].dt.floor("h")
+
+    # Second-level hourly coverage (post-expansion)
+    df_hr_seconds_hourly = (
+        df_avg.groupby(["customer", "local_day", "local_hour"], observed=True)[
+            "HeartRate"
+        ]
+        .count()
+        .reset_index(name="HR_seconds_in_hour")
+    )
+
+    df_hr_seconds_hours_with_data = (
+        df_hr_seconds_hourly.groupby(["customer", "local_day"], observed=True)[
+            "local_hour"
+        ]
+        .nunique()
+        .reset_index(name="HR_seconds_hours_with_data")
+    )
 
     # Daily aggregation
     df_hr_daily = (
@@ -548,6 +590,113 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100)):
             HR_zone_vigorous=("HR_zone_vigorous", "sum"),
         )
         .reset_index()
+    )
+
+    # Per-hour stats (record-level)
+    if include_zero_hours:
+        df_hr_raw_days = df_hr_raw_daily[["customer", "local_day"]].drop_duplicates()
+        df_hr_raw_days = df_hr_raw_days.assign(_join_key=1)
+        df_hr_raw_hours = pd.DataFrame({"hour": range(24), "_join_key": 1})
+        df_hr_raw_full = df_hr_raw_days.merge(df_hr_raw_hours, on="_join_key").drop(
+            columns=["_join_key"]
+        )
+        df_hr_raw_full["local_hour"] = df_hr_raw_full["local_day"] + pd.to_timedelta(
+            df_hr_raw_full["hour"], unit="h"
+        )
+        df_hr_raw_full = df_hr_raw_full.merge(
+            df_hr_raw_hourly,
+            on=["customer", "local_day", "local_hour"],
+            how="left",
+        )
+        df_hr_raw_full["HR_raw_records_in_hour"] = df_hr_raw_full[
+            "HR_raw_records_in_hour"
+        ].fillna(0)
+        df_hr_raw_hourly_stats = (
+            df_hr_raw_full.groupby(["customer", "local_day"], observed=True)
+            .agg(
+                HR_raw_records_per_hour_mean=(
+                    "HR_raw_records_in_hour",
+                    "mean",
+                ),
+                HR_raw_records_per_hour_median=(
+                    "HR_raw_records_in_hour",
+                    "median",
+                ),
+                HR_raw_records_per_hour_std=("HR_raw_records_in_hour", "std"),
+            )
+            .reset_index()
+        )
+    else:
+        df_hr_raw_hourly_stats = (
+            df_hr_raw_hourly.groupby(["customer", "local_day"], observed=True)
+            .agg(
+                HR_raw_records_per_hour_mean=(
+                    "HR_raw_records_in_hour",
+                    "mean",
+                ),
+                HR_raw_records_per_hour_median=(
+                    "HR_raw_records_in_hour",
+                    "median",
+                ),
+                HR_raw_records_per_hour_std=("HR_raw_records_in_hour", "std"),
+            )
+            .reset_index()
+        )
+
+    # Per-hour stats (second-level)
+    if include_zero_hours:
+        df_hr_seconds_days = df_avg[["customer", "local_day"]].drop_duplicates()
+        df_hr_seconds_days = df_hr_seconds_days.assign(_join_key=1)
+        df_hr_seconds_hours = pd.DataFrame({"hour": range(24), "_join_key": 1})
+        df_hr_seconds_full = df_hr_seconds_days.merge(
+            df_hr_seconds_hours, on="_join_key"
+        ).drop(columns=["_join_key"])
+        df_hr_seconds_full["local_hour"] = df_hr_seconds_full[
+            "local_day"
+        ] + pd.to_timedelta(df_hr_seconds_full["hour"], unit="h")
+        df_hr_seconds_full = df_hr_seconds_full.merge(
+            df_hr_seconds_hourly,
+            on=["customer", "local_day", "local_hour"],
+            how="left",
+        )
+        df_hr_seconds_full["HR_seconds_in_hour"] = df_hr_seconds_full[
+            "HR_seconds_in_hour"
+        ].fillna(0)
+        df_hr_seconds_hourly_stats = (
+            df_hr_seconds_full.groupby(["customer", "local_day"], observed=True)
+            .agg(
+                HR_seconds_per_hour_mean=("HR_seconds_in_hour", "mean"),
+                HR_seconds_per_hour_median=("HR_seconds_in_hour", "median"),
+                HR_seconds_per_hour_std=("HR_seconds_in_hour", "std"),
+            )
+            .reset_index()
+        )
+    else:
+        df_hr_seconds_hourly_stats = (
+            df_hr_seconds_hourly.groupby(["customer", "local_day"], observed=True)
+            .agg(
+                HR_seconds_per_hour_mean=("HR_seconds_in_hour", "mean"),
+                HR_seconds_per_hour_median=("HR_seconds_in_hour", "median"),
+                HR_seconds_per_hour_std=("HR_seconds_in_hour", "std"),
+            )
+            .reset_index()
+        )
+
+    # Merge coverage stats into daily
+    df_hr_daily = df_hr_daily.merge(
+        df_hr_raw_daily, on=["customer", "local_day"], how="left"
+    )
+    df_hr_daily = df_hr_daily.merge(
+        df_hr_raw_hours_with_records, on=["customer", "local_day"], how="left"
+    )
+    df_hr_daily = df_hr_daily.merge(
+        df_hr_raw_hourly_stats, on=["customer", "local_day"], how="left"
+    )
+    df_hr_daily = df_hr_daily.merge(
+        df_hr_seconds_hours_with_data, on=["customer", "local_day"], how="left"
+    )
+    df_hr_daily = df_hr_daily.merge(
+        df_hr_seconds_hourly_stats, on=["customer", "local_day"], how="left"
     )
 
     return df_hr_daily

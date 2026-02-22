@@ -54,7 +54,7 @@ import pickle
 from server_config import (
     datapath,
     preprocessed_path_freezed,
-    redcap_path,
+    proj_sheet,
     preprocessed_path,
 )
 from functions.preprocessing.ema_mappings import clean_heart_rate_data
@@ -86,6 +86,73 @@ backup_path = (
 df_backup = pd.read_feather(backup_path)
 print(df_backup.shape)
 df_backup.head()
+
+# %% [markdown]
+# ### Filter passive records by EMA post end (+14 days)
+
+# %%
+df_backup.groupby("customer")["startTimestamp_day"].nunique().sort_values(ascending=False)
+
+# %%
+monitoring_url = f"https://docs.google.com/spreadsheets/d/{proj_sheet}/export?format=csv"
+# monitoring_csv_fallback = os.path.join(preprocessed_path, "monitoring_data.csv")
+
+monitoring_source = monitoring_url
+df_monitoring = pd.read_csv(monitoring_url, low_memory=False)
+
+if "ema_post_end" not in df_monitoring.columns and "Ende EMA Post" in df_monitoring.columns:
+    df_monitoring = df_monitoring.rename(columns={"Ende EMA Post": "ema_post_end"})
+
+if "for_id" not in df_monitoring.columns:
+    candidate_for_id_cols = ["FOR_ID", "forid", "record_id", "Record ID"]
+    found_for_id_cols = [col for col in candidate_for_id_cols if col in df_monitoring.columns]
+    if found_for_id_cols:
+        df_monitoring = df_monitoring.rename(columns={found_for_id_cols[0]: "for_id"})
+    else:
+        raise KeyError("Could not find a for_id column in monitoring sheet.")
+
+if "ema_post_end" not in df_monitoring.columns:
+    raise KeyError("Could not find ema_post_end (or Ende EMA Post) in monitoring sheet.")
+
+df_monitoring["for_id"] = df_monitoring["for_id"].astype(str).str.strip()
+df_monitoring["ema_post_end"] = pd.to_datetime(
+    df_monitoring["ema_post_end"], dayfirst=True, errors="coerce"
+).dt.date
+
+df_post_end = (
+    df_monitoring.dropna(subset=["for_id", "ema_post_end"])
+    .groupby("for_id", as_index=False)["ema_post_end"]
+    .max()
+)
+df_post_end["post_cutoff_day"] = (
+    pd.to_datetime(df_post_end["ema_post_end"], errors="coerce") + pd.Timedelta(days=14)
+).dt.date
+
+if "for_id" not in df_backup.columns:
+    raise KeyError("df_backup is missing required column: for_id")
+
+df_backup["for_id"] = df_backup["for_id"].astype(str).str.strip()
+df_backup["local_start_time"] = pd.to_datetime(df_backup["local_start_time"], errors="coerce")
+df_backup["local_day_filter"] = df_backup["local_start_time"].dt.date
+
+n_records_before = len(df_backup)
+df_backup = df_backup.merge(df_post_end[["for_id", "post_cutoff_day"]], on="for_id", how="left")
+df_backup = df_backup[
+    df_backup["post_cutoff_day"].isna()
+    | (df_backup["local_day_filter"] <= df_backup["post_cutoff_day"])
+].copy()
+# df_backup = df_backup.drop(columns=["post_cutoff_day", "local_day_filter"])
+
+print(f"Loaded monitoring data from: {monitoring_source}")
+print(f"Records before post-end filtering: {n_records_before}")
+print(f"Records after post-end filtering: {len(df_backup)}")
+print(f"Records removed: {n_records_before - len(df_backup)}")
+
+# %%
+df_backup
+
+# %%
+df_backup.groupby("customer")["startTimestamp_day"].nunique().sort_values(ascending=False)
 
 # %% [markdown]
 # ### check the other types
