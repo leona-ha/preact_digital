@@ -233,6 +233,21 @@ df_backup[
 )
 
 # %%
+# sum all activity type detail 1 number of records aside walk, bike and run
+df_detail1_counts = df_backup[
+    df_backup["type"] == "ActivityTypeDetail1"
+].longValue.value_counts().sort_values(ascending=False).rename(
+    index=map_ActivityTypeDetail1
+)
+other_count = df_detail1_counts[
+    ~df_detail1_counts.index.isin(["WALK", "BIKE", "RUN"])
+].sum()
+other_count
+
+# %%
+11587 - 6618
+
+# %%
 df_backup[
     df_backup["type"] == "ActivityTypeDetail2"
 ].longValue.value_counts().sort_values(ascending=False).rename(
@@ -245,6 +260,91 @@ df_backup[
 
 # %%
 df_backup.type.value_counts()
+
+# %% [markdown]
+# ## This `ACTIVE` flag is a bit weird, check how does it play with ActivityTypeDetail1, WALK, RUN and BIKE
+
+# %%
+df = df_backup[df_backup["type"].isin(["ActivityType", "ActivityTypeDetail1", "ActivityTypeDetail2"])].copy()
+# combine mappings and map all the values
+combined_map = {**map_ActivityType, **map_ActivityTypeDetail1, **map_ActivityTypeDetail2}
+df["mapped_activity"] = df["longValue"].map(combined_map)
+
+# %%
+df.sort_values(["customer", "startTimestamp"], ascending=False, inplace=True)
+df[~df["mapped_activity"].isin(["SLEEP", "WALK", "REST", "RUN", "BIKE"])]
+# df
+
+# %%
+
+# %% [markdown]
+# ## Elevation Gain & Floors Climbed
+
+# %%
+df_elevation = df_backup[df_backup["type"] == "ElevationGain"].copy()
+print(df_elevation.startTimestamp.min(), df_elevation.startTimestamp.max()) 
+# covers the whole period
+df_elevation["local_day"] = df_elevation["local_start_time"].dt.floor("D")
+df_elevation["start_end"].describe([0.01, 0.1, 0.05, 0.25, 0.5, 0.75, 0.9, 0.95, 0.97,0.99]) 
+# basically 1 minute intervals
+# df_elevation[df_elevation["start_end"] < 60
+
+df_elevation
+
+# %%
+df_elevation["start_end"].plot.hist(bins=100)
+plt.yscale('log')
+plt.xlabel('Elevation Gain Duration (seconds)')
+
+# %%
+bins = np.arange(0, 130, 0.5)
+
+plt.figure(figsize=(12, 8))
+
+df_elevation[df_elevation["start_end"] == 60]["doubleValue"].plot.hist(
+    bins=bins, density=True, alpha=0.5, label='=60s intervals'
+)
+
+df_elevation[df_elevation["start_end"] < 60]["doubleValue"].plot.hist(
+    bins=bins, density=True, alpha=0.5, label='<60s intervals'
+)
+
+df_elevation[(df_elevation["start_end"] >= 60) & (df_elevation["start_end"] < 120)]["doubleValue"].plot.hist(
+    bins=bins, density=True, alpha=0.5, label='60-120s intervals'
+)
+
+df_elevation[(df_elevation["start_end"] >= 120) & (df_elevation["start_end"] <= 14400)]["doubleValue"].plot.hist(
+    bins=bins, density=True, alpha=0.5, label='120s-4h intervals'
+)
+
+df_elevation[df_elevation["start_end"] > 14400]["doubleValue"].plot.hist(
+    bins=bins, density=True, alpha=0.5, label='>4h intervals'
+)
+
+plt.xlabel('Elevation Gain (meters)')
+plt.ylabel('Density')
+plt.yscale("log")
+plt.legend()
+plt.title('Distribution of Elevation Gain by Interval Duration')
+
+# %%
+df_elevation = df_elevation[df_elevation["start_end"] <= 3600 * 4].copy()
+df_elevation.groupby(["customer", "local_day"]).agg(
+    total_elevation_gain=("doubleValue", "sum")
+).reset_index()
+
+# %% [markdown]
+# ### FloorsClimbed
+
+# %%
+df_floors = df_backup[df_backup["type"] == "FloorsClimbed"].copy()
+df_floors["local_day"] = df_floors["local_start_time"].dt.floor("D")
+df_floors.head()
+
+# %%
+df_floors.groupby(["customer", "local_day"]).agg(
+    total_floors_climbed=("longValue", "sum")
+).reset_index().plot.hist(bins=50)
 
 # %% [markdown]
 # ## ActivityType
