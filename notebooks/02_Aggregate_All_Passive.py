@@ -28,6 +28,7 @@ import pandas as pd
 import scipy.stats
 import seaborn as sns
 # import cProfile
+from pathlib import Path
 
 
 
@@ -91,7 +92,150 @@ df_backup.head()
 # ### Filter passive records by EMA post end (+14 days)
 
 # %%
+# check how many unique days of data we have per customers
 df_backup.groupby("customer")["startTimestamp_day"].nunique().sort_values(ascending=False)
+
+
+# %% [markdown]
+# #### Filter by redcap
+
+# %%
+def get_last_avail_redcap_date_per_participant(
+    for_df,
+    zert_df,
+    participant_col="for_id",
+    date_cols=None,
+    col_priority=None,
+):
+    if date_cols is None:
+        date_cols = [
+            "ema_begin_baseline",
+            "ema_begin_t20",
+            "ema_begin_post",
+            "ema_begin_passive",
+            "ema_completed_date",
+            "ema_end_baseline",
+            "ema_end_t20",
+            "ema_end_post",
+            "ema_end_passive",
+        ]
+
+    if col_priority is None:
+        col_priority = [
+            "ema_completed_date",
+            "ema_end_passive",
+            "ema_end_post",
+            "ema_end_t20",
+            "ema_end_baseline",
+        ]
+
+    onboarding = pd.concat([for_df, zert_df], axis=0, ignore_index=True)
+
+    available_date_cols = [c for c in date_cols if c in onboarding.columns]
+    if not available_date_cols:
+        return pd.DataFrame(
+            columns=[participant_col, "last_avail_date_redcap", "last_avail_colname"]
+        )
+
+    onboarding = onboarding[[participant_col, *available_date_cols]].copy()
+    onboarding = onboarding.groupby(participant_col, as_index=False).agg(
+        lambda s: s.dropna().iloc[0] if not s.dropna().empty else pd.NA
+    )
+
+    ordered_date_cols = [c for c in col_priority if c in available_date_cols] + [
+        c for c in available_date_cols if c not in col_priority
+    ]
+    priority_rank = {c: i for i, c in enumerate(ordered_date_cols)}
+
+    tmp = onboarding[[participant_col, *ordered_date_cols]].copy()
+    tmp[ordered_date_cols] = tmp[ordered_date_cols].apply(
+        pd.to_datetime, errors="coerce"
+    )
+
+    tmp["last_avail_date_redcap"] = tmp[ordered_date_cols].max(axis=1)
+    is_last = tmp[ordered_date_cols].eq(tmp["last_avail_date_redcap"], axis=0)
+    tmp["last_avail_colname"] = is_last.idxmax(axis=1).where(is_last.any(axis=1), pd.NA)
+    tmp["last_avail_col_priority"] = (
+        tmp["last_avail_colname"].map(priority_rank).fillna(len(priority_rank))
+    )
+
+    last_avail_date_per_participant = (
+        tmp.sort_values(
+            [participant_col, "last_avail_date_redcap", "last_avail_col_priority"],
+            ascending=[True, False, True],
+            na_position="last",
+            kind="mergesort",
+        )
+        .groupby(participant_col, as_index=False)
+        .head(1)[[participant_col, "last_avail_date_redcap", "last_avail_colname"]]
+        .sort_values(participant_col)
+        .reset_index(drop=True)
+    )
+
+    return last_avail_date_per_participant
+
+
+# %%
+redcap_root = Path("/home/milu10/src/tiki_code/tmp/SP6/redcap")
+for_ema_onboarding_13012026 = pd.read_csv(
+    redcap_root / "ema_onboarding/FOR_ema_onboarding_13012026.csv"
+)
+zert_for_ema_onboarding_13012026 = pd.read_csv(
+    redcap_root / "ema_onboarding/ZERT_FOR_ema_onboarding_13012026.csv"
+)
+
+# %%
+last_avail_redcap = get_last_avail_redcap_date_per_participant(
+    for_ema_onboarding_13012026, zert_for_ema_onboarding_13012026
+)
+last_avail_redcap["last_avail_colname"].value_counts(dropna=False)
+
+# %%
+if "for_id" not in df_backup.columns:
+    raise KeyError("df_backup is missing required column: for_id")
+
+if "startTimestamp" in df_backup.columns:
+    ts_col = "startTimestamp"
+# elif "local_start_time" in df_backup.columns:
+#     ts_col = "local_start_time"
+else:
+    raise KeyError("df_backup is missing both startTimestamp and local_start_time")
+
+last_avail_redcap = last_avail_redcap.copy()
+last_avail_redcap["last_avail_date_redcap"] = pd.to_datetime(
+    last_avail_redcap["last_avail_date_redcap"], errors="coerce", utc=True
+)
+last_avail_redcap["redcap_cutoff_plus21"] = (
+    last_avail_redcap["last_avail_date_redcap"] + pd.Timedelta(days=21)
+)
+
+# df_backup["for_id"] = df_backup["for_id"].astype(str).str.strip()
+# df_backup[ts_col] = pd.to_datetime(df_backup[ts_col], errors="coerce", utc=True)
+
+if "redcap_cutoff_plus21" in df_backup.columns:
+    df_backup = df_backup.drop(columns=["redcap_cutoff_plus21"])
+
+n_records_before = len(df_backup)
+df_backup = df_backup.merge(
+    last_avail_redcap[["for_id", "redcap_cutoff_plus21"]],
+    on="for_id",
+    how="left",
+)
+
+df_backup = df_backup[
+    df_backup["redcap_cutoff_plus21"].isna()
+    | (df_backup[ts_col] <= df_backup["redcap_cutoff_plus21"])
+].copy()
+
+print(f"Records before REDCap +21d filtering: {n_records_before:_d}")
+print(f"Records after REDCap +21d filtering: {len(df_backup):_d}")
+print(f"Records removed: {n_records_before - len(df_backup):_d}")
+
+# %%
+df_backup.groupby("customer")["startTimestamp_day"].nunique().sort_values(ascending=False)
+
+# %% [markdown]
+# #### Filter by monitoring spreadsheet
 
 # %%
 monitoring_url = f"https://docs.google.com/spreadsheets/d/{proj_sheet}/export?format=csv"
