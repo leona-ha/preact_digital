@@ -34,7 +34,7 @@ import pandas as pd
 
 def create_utcday_tzoffset_df(
     df: pd.DataFrame,
-    customer_col: str = "customer",
+    customer_col: str = "id",
     startTimestamp_col: str = "startTimestamp",
     timezoneOffset_col: str = "timezoneOffset",
     type_col: str = "type",
@@ -50,7 +50,7 @@ def create_utcday_tzoffset_df(
     df = df[[customer_col, startTimestamp_col, timezoneOffset_col, type_col, createdAt_col]].copy()
 
     rename_map = {
-        customer_col: "customer",
+        customer_col: "id",
         startTimestamp_col: "startTimestamp",
         timezoneOffset_col: "timezoneOffset",
         type_col: "type",
@@ -368,7 +368,7 @@ def create_utcday_tzoffset_df(
 
 
 
-def merge_fill_tz(df, df_tz, day_col="quest_create_day", customer_col="customer"):
+def merge_fill_tz(df, df_tz, day_col="date", customer_col="id"):
     """
     Fill missing timezone offsets by merging with timezone reference data,
     forward-filling within customer groups, correcting DST mismatches, and
@@ -403,7 +403,7 @@ def merge_fill_tz(df, df_tz, day_col="quest_create_day", customer_col="customer"
         df,
         df_tz,
         left_on=[customer_col, day_col],
-        right_on=["customer", "day"],
+        right_on=["id", "day"],
         how="left",
         suffixes=("", ""),
     )
