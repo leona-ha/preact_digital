@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# %%
 """Create a unified, timezone‑aware Parquet backup from mixed CSV exports.
 
 Changes compared with the previous version
@@ -43,15 +44,11 @@ for p in (BASE_DIR, SRC_DIR):
 from server_config import backup_path, preprocessed_path, raw_path  # noqa: E402
 
 PATTERN_BIG = os.path.join(backup_path, "first_backup", "tiki_backup_*.csv")
-PATTERN_S1 = os.path.join(
-    raw_path, "tiki_backup_files", "export_tiki_21052024", "epoch_part*.csv"
-)
-PATTERN_S2 = os.path.join(
-    raw_path, "tiki_backup_files", "export_tiki_11112024", "epoch_part*.csv"
-)
-PATTERN_S3 = os.path.join(
-    raw_path, "tiki_backup_files", "export_tiki_05052025", "epoch_part*.csv"
-)
+PATTERN_S1 = os.path.join(raw_path, "tiki_backup_files", "export_tiki_21052024", "epoch_part*.csv")
+PATTERN_S2 = os.path.join(raw_path, "tiki_backup_files", "export_tiki_11112024", "epoch_part*.csv")
+PATTERN_S3 = os.path.join(raw_path, "tiki_backup_files", "export_tiki_05052025", "epoch_part*.csv")
+PATTERN_S4 = os.path.join(raw_path, "tiki_backup_files", "export_tiki_03112025", "epoch_part*.csv")
+
 
 OUT_PARQUET = os.path.join(preprocessed_path, "backup_passive_05052025.parquet")
 
@@ -226,7 +223,7 @@ logging.info(f"[BIG DONE] last_ts={last_ts}")
 # SMALL‑Datasets – Epoch ms → UTC
 # ---------------------------------------------------------------------
 
-for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3)]:
+for label, pattern in [("S1", PATTERN_S1), ("S2", PATTERN_S2), ("S3", PATTERN_S3), ("S4", PATTERN_S4)]:
     files = sorted(glob.glob(pattern))
     logging.info(f"[{label}] {len(files)} Dateien")
 
