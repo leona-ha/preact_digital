@@ -15,7 +15,7 @@ def compute_sleep_sessions(
     hypersomnia_threshold=10 * 60 * 60,
 ):
     df = df[
-        df["type"].isin(
+        df["modality"].isin(
             [
                 "SleepDeepBinary",
                 "SleepLightBinary",
@@ -28,8 +28,8 @@ def compute_sleep_sessions(
             ]
         )
     ]
-    df = df.sort_values(by=["customer", "startTimestamp"]).reset_index(drop=True)
-    df["duration"] = (df["endTimestamp"] - df["startTimestamp"]).dt.total_seconds()
+    df = df.sort_values(by=["id", "timestamp_start"]).reset_index(drop=True)
+    df["duration"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
 
     # MAX_GAP_SECOND = 90 * 60  # 90 minutes as the maximum gap to consider same sleep session
     # AWAKENING_THRESHOLD = 5 * 60  # 5 minutes
@@ -40,38 +40,40 @@ def compute_sleep_sessions(
     # Step 1: Identify sleep sessions from all the records
     # TODO might as well use only SleepState & SleepAwake records only
     df_sleepall = (
-        # df[df["type"] == "SleepInBedBinary"]
-        df.sort_values(by=["customer", "startTimestamp"]).reset_index(drop=True)
+        # df[df["modality"] == "SleepInBedBinary"]
+        df.sort_values(by=["id", "timestamp_start"]).reset_index(drop=True)
     )
-    df_sleepall["next_sleep_record_start"] = df_sleepall.groupby("customer")[
-        "startTimestamp"
+    df_sleepall["next_sleep_record_start"] = df_sleepall.groupby("id", observed=True)[
+        "timestamp_start"
     ].shift(-1)
     df_sleepall["gap_to_next"] = (
-        df_sleepall["next_sleep_record_start"] - df_sleepall["endTimestamp"]
+        df_sleepall["next_sleep_record_start"] - df_sleepall["timestamp_end"]
     )
     df_sleepall["is_lastentryinsession"] = (
         df_sleepall["gap_to_next"].dt.total_seconds() > max_gap_seconds
     ) | (df_sleepall["gap_to_next"].isna())
     df_sleepall["is_firstentryinsession"] = (
-        df_sleepall.groupby("customer")["is_lastentryinsession"].shift(1).fillna(True)
+        df_sleepall.groupby("id", observed=True)["is_lastentryinsession"]
+        .shift(1)
+        .fillna(True)
     )
     df_sleepall["sleep_session_id"] = df_sleepall["is_firstentryinsession"].cumsum() - 1
 
     # Step 2: Create df_sleep_sessions with session boundaries
     df_sleep_sessions = (
-        df_sleepall.groupby(["customer", "sleep_session_id"])
+        df_sleepall.groupby(["id", "sleep_session_id"], observed=True)
         .agg(
             {
-                "startTimestamp": "first",
-                "endTimestamp": "last",  # TODO change to max ?
-                "local_start_time": "first",
-                "local_end_time": "last",  #! and here
+                "timestamp_start": "first",
+                "timestamp_end": "last",  # TODO change to max ?
+                "local_timestamp_start": "first",
+                "local_timestamp_end": "last",  #! and here
             }
         )
         .reset_index()
     )
     df_sleep_sessions["sleep_session_duration"] = (
-        df_sleep_sessions["endTimestamp"] - df_sleep_sessions["startTimestamp"]
+        df_sleep_sessions["timestamp_end"] - df_sleep_sessions["timestamp_start"]
     ).dt.total_seconds()
 
     # Step 3: Assign session IDs to all relevant records via merge + filter
@@ -82,32 +84,34 @@ def compute_sleep_sessions(
     #     "SleepDeepBinary",
     #     "SleepStateBinary",
     # ]
-    # df_relevant = df[df["type"].isin(relevant_types)].copy()
+    # df_relevant = df[df["modality"].isin(relevant_types)].copy()
 
-    # Merge on customer only, then filter by time bounds (more memory but no sorting issues)
+    # Merge on id only, then filter by time bounds (more memory but no sorting issues)
     sessions_for_merge = df_sleep_sessions[
-        ["customer", "sleep_session_id", "startTimestamp", "endTimestamp"]
-    ].rename(columns={"startTimestamp": "session_start", "endTimestamp": "session_end"})
+        ["id", "sleep_session_id", "timestamp_start", "timestamp_end"]
+    ].rename(
+        columns={"timestamp_start": "session_start", "timestamp_end": "session_end"}
+    )
 
     # with merge_asof, both times must be sorted
     df_with_session = (
         pd.merge_asof(
-            df.sort_values(by=["startTimestamp", "customer"]),
-            sessions_for_merge.sort_values(by=["session_start", "customer"]),
-            left_on="startTimestamp",
+            df.sort_values(by=["timestamp_start", "id"]),
+            sessions_for_merge.sort_values(by=["session_start", "id"]),
+            left_on="timestamp_start",
             right_on="session_start",
-            by="customer",
+            by="id",
             direction="backward",
         )
-        .sort_values(by=["customer", "startTimestamp"])
+        .sort_values(by=["id", "timestamp_start"])
         .reset_index(drop=True)
     )
 
     # Step 4: Aggregate durations by session and type (vectorized!)
     duration_agg = (
-        df_with_session.groupby(
-            ["customer", "sleep_session_id", "type"], observed=True
-        )["duration"]
+        df_with_session.groupby(["id", "sleep_session_id", "modality"], observed=True)[
+            "duration"
+        ]
         .sum()
         .unstack(fill_value=0)
     )
@@ -130,15 +134,15 @@ def compute_sleep_sessions(
 
     # Step 5: Calculate awakenings (vectorized with groupby + shift)
     sleepstate = (
-        df_with_session[df_with_session["type"] == "SleepStateBinary"]
-        .sort_values(["customer", "sleep_session_id", "startTimestamp"])
+        df_with_session[df_with_session["modality"] == "SleepStateBinary"]
+        .sort_values(["id", "sleep_session_id", "timestamp_start"])
         .copy()
     )
-    sleepstate["next_start"] = sleepstate.groupby(["customer", "sleep_session_id"])[
-        "startTimestamp"
-    ].shift(-1)
+    sleepstate["next_start"] = sleepstate.groupby(
+        ["id", "sleep_session_id"], observed=True
+    )["timestamp_start"].shift(-1)
     sleepstate["gap_to_next"] = (
-        sleepstate["next_start"] - sleepstate["endTimestamp"]
+        sleepstate["next_start"] - sleepstate["timestamp_end"]
     ).dt.total_seconds()
     sleepstate["is_awakening"] = sleepstate["gap_to_next"] >= awakening_threshold
     sleepstate["is_long_awakening"] = (
@@ -146,22 +150,22 @@ def compute_sleep_sessions(
     )
 
     awakening_agg = (
-        sleepstate.groupby(["customer", "sleep_session_id"])
+        sleepstate.groupby(["id", "sleep_session_id"], observed=True)
         .agg(
             awakenings=("is_awakening", "sum"),
             long_awakenings=("is_long_awakening", "sum"),
-            sleep_onset=("local_start_time", "min"),
-            sleep_offset=("local_end_time", "max"),
+            sleep_onset=("local_timestamp_start", "min"),
+            sleep_offset=("local_timestamp_end", "max"),
         )
         .reset_index()
     )
 
     # Step 6: Merge all aggregations back to df_sleep_sessions
     df_sleep_sessions = df_sleep_sessions.merge(
-        duration_agg, on=["customer", "sleep_session_id"], how="left"
+        duration_agg, on=["id", "sleep_session_id"], how="left"
     )
     df_sleep_sessions = df_sleep_sessions.merge(
-        awakening_agg, on=["customer", "sleep_session_id"], how="left"
+        awakening_agg, on=["id", "sleep_session_id"], how="left"
     )
 
     df_sleep_sessions["sleep_onset_hour"] = (
@@ -229,9 +233,9 @@ def compute_sleep_sessions(
 
     # Step 8: Additional session-level features
     # assign the day of the sleep session based on the wake up day (local)
-    df_sleep_sessions["day"] = df_sleep_sessions["local_end_time"].dt.date
+    df_sleep_sessions["day"] = df_sleep_sessions["local_timestamp_end"].dt.date
     df_sleep_sessions["num_sessions_in_day"] = df_sleep_sessions.groupby(
-        ["customer", "day"]
+        ["id", "day"], observed=True
     )["sleep_session_id"].transform("count")
 
     return df_sleep_sessions
@@ -400,7 +404,7 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
     Returns
     -------
     pd.DataFrame
-        Daily sleep aggregates with columns: customer, local_day, and sleep metrics
+        Daily sleep aggregates with columns: id, local_day, and sleep metrics
     """
     # Compute sleep sessions using existing function
     # ! the bottleneck is here, if to optimize, optimize compute_sleep_sessions
@@ -409,9 +413,9 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
     # Convert day to datetime for consistency
     df_sessions["local_day"] = pd.to_datetime(df_sessions["day"])
 
-    # Get longest session per customer-day
+    # Get longest session per id-day
     df_longest = df_sessions.loc[
-        df_sessions.groupby(["customer", "local_day"])[
+        df_sessions.groupby(["id", "local_day"], observed=True)[
             "sleep_session_duration"
         ].idxmax()
     ].reset_index(drop=True)
@@ -437,14 +441,14 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
         "deep_sleep_pct",
     ]
 
-    df_longest_subset = df_longest[["customer", "local_day"] + longest_cols].copy()
+    df_longest_subset = df_longest[["id", "local_day"] + longest_cols].copy()
     df_longest_subset = df_longest_subset.rename(
         columns={col: f"longest_{col}" for col in longest_cols}
     )
 
     # Sum across all sessions per day
     df_summed = (
-        df_sessions.groupby(["customer", "local_day"])
+        df_sessions.groupby(["id", "local_day"], observed=True)
         .agg(
             sum_sleep_session_duration=("sleep_session_duration", "sum"),
             sum_total_sleep_time=("total_sleep_time", "sum"),
@@ -462,12 +466,13 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
 
     # Merge longest and summed
     df_sleep_daily = df_longest_subset.merge(
-        df_summed, on=["customer", "local_day"], how="outer"
+        df_summed, on=["id", "local_day"], how="outer"
     )
 
     return df_sleep_daily
 
 
+# TODO HR zones - change the algorithm
 def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=False):
     """
     Aggregate heart rate data to daily level.
@@ -484,20 +489,52 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     Returns
     -------
     pd.DataFrame
-        Daily HR aggregates with columns: customer, local_day, and HR metrics
+        Daily HR aggregates with columns: id, local_day, and HR metrics
+
+    Returned metrics include:
+    | Column Name | Description | Source / Calculation |
+    | :--- | :--- | :--- |
+    | **`id`** | Participant identifier | Grouping key |
+    | **`local_day`** | The local calendar day of the records (floored to midnight) | Grouping key |
+    | **`HR_count`** | Total number of 1-second HR records in the day | Calculated on 1-second expanded data |
+    | **`HR_mean`** | Average heart rate over the day | Calculated on 1-second expanded data |
+    | **`HR_std`** | Standard deviation of heart rate | Calculated on 1-second expanded data |
+    | **`HR_min`** | Minimum heart rate recorded in the day | Calculated on 1-second expanded data |
+    | **`HR_max`** | Maximum heart rate recorded in the day | Calculated on 1-second expanded data |
+    | **`HR_skew`** | Skewness of the heart rate distribution | Calculated on 1-second expanded data |
+    | **`HR_kurtosis`** | Kurtosis of the heart rate distribution | Calculated on 1-second expanded data |
+    | **`HR_zone_resting`** | Total seconds spent with HR below resting threshold (default < 60) | Calculated on 1-second expanded data |
+    | **`HR_zone_moderate`** | Total seconds spent with HR between resting and vigorous thresholds (default 60 ≤ HR < 100) | Calculated on 1-second expanded data |
+    | **`HR_zone_vigorous`** | Total seconds spent with HR above vigorous threshold (default ≥ 100) | Calculated on 1-second expanded data |
+    | **`HR_raw_records`** | Total count of raw HR records logged per day | Calculated on raw unexpanded records |
+    | **`HR_raw_hours_with_records`** | Number of unique hours in the day that contain at least one raw HR record | Calculated on raw unexpanded records |
+    | **`HR_raw_records_per_hour_mean`** | Mean of raw records per hour (averaged **only over hours with data**) | Calculated on raw unexpanded records |
+    | **`HR_raw_records_per_hour_median`**| Median of raw records per hour (calculated **only over hours with data**) | Calculated on raw unexpanded records |
+    | **`HR_raw_records_per_hour_std`** | Standard deviation of raw records per hour (calculated **only over hours with data**) | Calculated on raw unexpanded records |
+    | **`HR_seconds_hours_with_data`** | Number of unique hours in the day containing 1-second expanded HR data | Calculated on 1-second expanded data |
+    | **`HR_seconds_per_hour_mean`** | Mean of 1-second HR records per hour (averaged **only over hours with data**) | Calculated on 1-second expanded data |
+    | **`HR_seconds_per_hour_median`** | Median of 1-second HR records per hour (calculated **only over hours with data**) | Calculated on 1-second expanded data |
+    | **`HR_seconds_per_hour_std`** | Standard deviation of 1-second HR records per hour (calculated **only over hours with data**) | Calculated on 1-second expanded data |
+    | **`HR_coverage`** | Percentage of the day covered by HR recordings (`HR_raw_hours_with_records / 24`) | Derived from raw coverage stats |
     """
     resting_threshold, vigorous_threshold = zone_thresholds
 
     # Filter HR data
-    df = df_backup[df_backup["type"] == "HeartRate"].copy()
+    df = df_backup[df_backup["modality"] == "HeartRate"].copy()
     df = df[
-        ["customer", "startTimestamp", "endTimestamp", "longValue", "local_start_time"]
+        [
+            "id",
+            "timestamp_start",
+            "timestamp_end",
+            "float_value",
+            "local_timestamp_start",
+        ]
     ].copy()
-    df = df.rename(columns={"longValue": "HeartRate"})
+    df = df.rename(columns={"float_value": "HeartRate"})
 
     # Compute duration and expand to 1-second resolution
     df["duration"] = (
-        (df["endTimestamp"] - df["startTimestamp"])
+        (df["timestamp_end"] - df["timestamp_start"])
         .dt.total_seconds()
         .fillna(0)
         .astype(int)
@@ -505,23 +542,23 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     df = df[df["duration"] > 0]  # Remove zero-duration records
 
     # Record-level daily coverage (pre-expansion)
-    df["local_day"] = df["local_start_time"].dt.floor("D")
-    df["local_hour"] = df["local_start_time"].dt.floor("h")
+    df["local_day"] = df["local_timestamp_start"].dt.floor("D")
+    df["local_hour"] = df["local_timestamp_start"].dt.floor("h")
 
     df_hr_raw_daily = (
-        df.groupby(["customer", "local_day"], observed=True)
+        df.groupby(["id", "local_day"], observed=True)
         .size()
         .reset_index(name="HR_raw_records")
     )
 
     df_hr_raw_hourly = (
-        df.groupby(["customer", "local_day", "local_hour"], observed=True)
+        df.groupby(["id", "local_day", "local_hour"], observed=True)
         .size()
         .reset_index(name="HR_raw_records_in_hour")
     )
 
     df_hr_raw_hours_with_records = (
-        df_hr_raw_hourly.groupby(["customer", "local_day"], observed=True)["local_hour"]
+        df_hr_raw_hourly.groupby(["id", "local_day"], observed=True)["local_hour"]
         .nunique()
         .reset_index(name="HR_raw_hours_with_records")
     )
@@ -529,16 +566,16 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     # Expand rows
     df_expanded = df.loc[df.index.repeat(df["duration"])].copy()
     df_expanded["time_offset"] = df_expanded.groupby(level=0).cumcount()
-    df_expanded["timestamp"] = df_expanded["startTimestamp"] + pd.to_timedelta(
+    df_expanded["timestamp"] = df_expanded["timestamp_start"] + pd.to_timedelta(
         df_expanded["time_offset"], unit="s"
     )
-    df_expanded["local_timestamp"] = df_expanded["local_start_time"] + pd.to_timedelta(
-        df_expanded["time_offset"], unit="s"
-    )
+    df_expanded["local_timestamp"] = df_expanded[
+        "local_timestamp_start"
+    ] + pd.to_timedelta(df_expanded["time_offset"], unit="s")
 
     # Deduplicate overlapping entries via mean
     df_avg = (
-        df_expanded.groupby(["customer", "timestamp"])
+        df_expanded.groupby(["id", "timestamp"], observed=True)
         .agg(
             HeartRate=("HeartRate", "mean"),
             local_timestamp=("local_timestamp", "first"),
@@ -559,24 +596,20 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
 
     # Second-level hourly coverage (post-expansion)
     df_hr_seconds_hourly = (
-        df_avg.groupby(["customer", "local_day", "local_hour"], observed=True)[
-            "HeartRate"
-        ]
+        df_avg.groupby(["id", "local_day", "local_hour"], observed=True)["HeartRate"]
         .count()
         .reset_index(name="HR_seconds_in_hour")
     )
 
     df_hr_seconds_hours_with_data = (
-        df_hr_seconds_hourly.groupby(["customer", "local_day"], observed=True)[
-            "local_hour"
-        ]
+        df_hr_seconds_hourly.groupby(["id", "local_day"], observed=True)["local_hour"]
         .nunique()
         .reset_index(name="HR_seconds_hours_with_data")
     )
 
     # Daily aggregation
     df_hr_daily = (
-        df_avg.groupby(["customer", "local_day"])
+        df_avg.groupby(["id", "local_day"], observed=True)
         .agg(
             HR_count=("HeartRate", "count"),
             HR_mean=("HeartRate", "mean"),
@@ -594,7 +627,7 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
 
     # Per-hour stats (record-level)
     if include_zero_hours:
-        df_hr_raw_days = df_hr_raw_daily[["customer", "local_day"]].drop_duplicates()
+        df_hr_raw_days = df_hr_raw_daily[["id", "local_day"]].drop_duplicates()
         df_hr_raw_days = df_hr_raw_days.assign(_join_key=1)
         df_hr_raw_hours = pd.DataFrame({"hour": range(24), "_join_key": 1})
         df_hr_raw_full = df_hr_raw_days.merge(df_hr_raw_hours, on="_join_key").drop(
@@ -605,14 +638,14 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         )
         df_hr_raw_full = df_hr_raw_full.merge(
             df_hr_raw_hourly,
-            on=["customer", "local_day", "local_hour"],
+            on=["id", "local_day", "local_hour"],
             how="left",
         )
         df_hr_raw_full["HR_raw_records_in_hour"] = df_hr_raw_full[
             "HR_raw_records_in_hour"
         ].fillna(0)
         df_hr_raw_hourly_stats = (
-            df_hr_raw_full.groupby(["customer", "local_day"], observed=True)
+            df_hr_raw_full.groupby(["id", "local_day"], observed=True)
             .agg(
                 HR_raw_records_per_hour_mean=(
                     "HR_raw_records_in_hour",
@@ -628,7 +661,7 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         )
     else:
         df_hr_raw_hourly_stats = (
-            df_hr_raw_hourly.groupby(["customer", "local_day"], observed=True)
+            df_hr_raw_hourly.groupby(["id", "local_day"], observed=True)
             .agg(
                 HR_raw_records_per_hour_mean=(
                     "HR_raw_records_in_hour",
@@ -645,7 +678,7 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
 
     # Per-hour stats (second-level)
     if include_zero_hours:
-        df_hr_seconds_days = df_avg[["customer", "local_day"]].drop_duplicates()
+        df_hr_seconds_days = df_avg[["id", "local_day"]].drop_duplicates()
         df_hr_seconds_days = df_hr_seconds_days.assign(_join_key=1)
         df_hr_seconds_hours = pd.DataFrame({"hour": range(24), "_join_key": 1})
         df_hr_seconds_full = df_hr_seconds_days.merge(
@@ -656,14 +689,14 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         ] + pd.to_timedelta(df_hr_seconds_full["hour"], unit="h")
         df_hr_seconds_full = df_hr_seconds_full.merge(
             df_hr_seconds_hourly,
-            on=["customer", "local_day", "local_hour"],
+            on=["id", "local_day", "local_hour"],
             how="left",
         )
         df_hr_seconds_full["HR_seconds_in_hour"] = df_hr_seconds_full[
             "HR_seconds_in_hour"
         ].fillna(0)
         df_hr_seconds_hourly_stats = (
-            df_hr_seconds_full.groupby(["customer", "local_day"], observed=True)
+            df_hr_seconds_full.groupby(["id", "local_day"], observed=True)
             .agg(
                 HR_seconds_per_hour_mean=("HR_seconds_in_hour", "mean"),
                 HR_seconds_per_hour_median=("HR_seconds_in_hour", "median"),
@@ -673,7 +706,7 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         )
     else:
         df_hr_seconds_hourly_stats = (
-            df_hr_seconds_hourly.groupby(["customer", "local_day"], observed=True)
+            df_hr_seconds_hourly.groupby(["id", "local_day"], observed=True)
             .agg(
                 HR_seconds_per_hour_mean=("HR_seconds_in_hour", "mean"),
                 HR_seconds_per_hour_median=("HR_seconds_in_hour", "median"),
@@ -683,21 +716,22 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         )
 
     # Merge coverage stats into daily
+    df_hr_daily = df_hr_daily.merge(df_hr_raw_daily, on=["id", "local_day"], how="left")
     df_hr_daily = df_hr_daily.merge(
-        df_hr_raw_daily, on=["customer", "local_day"], how="left"
+        df_hr_raw_hours_with_records, on=["id", "local_day"], how="left"
     )
     df_hr_daily = df_hr_daily.merge(
-        df_hr_raw_hours_with_records, on=["customer", "local_day"], how="left"
+        df_hr_raw_hourly_stats, on=["id", "local_day"], how="left"
     )
     df_hr_daily = df_hr_daily.merge(
-        df_hr_raw_hourly_stats, on=["customer", "local_day"], how="left"
+        df_hr_seconds_hours_with_data, on=["id", "local_day"], how="left"
     )
     df_hr_daily = df_hr_daily.merge(
-        df_hr_seconds_hours_with_data, on=["customer", "local_day"], how="left"
+        df_hr_seconds_hourly_stats, on=["id", "local_day"], how="left"
     )
-    df_hr_daily = df_hr_daily.merge(
-        df_hr_seconds_hourly_stats, on=["customer", "local_day"], how="left"
-    )
+
+    # coverage as the number of hours with records divided by 24
+    df_hr_daily["HR_coverage"] = df_hr_daily["HR_raw_hours_with_records"] / 24
 
     return df_hr_daily
 
@@ -718,29 +752,29 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     Returns
     -------
     pd.DataFrame
-        Daily steps aggregates with columns: customer, local_day, and step metrics
+        Daily steps aggregates with columns: id, local_day, and step metrics
     """
     # Filter Steps data
-    df = df_backup[df_backup["type"] == "Steps"].copy()
+    df = df_backup[df_backup["modality"] == "Steps"].copy()
     df = df[
         [
-            "customer",
+            "id",
             "for_id",
-            "startTimestamp",
-            "endTimestamp",
-            "doubleValue",
-            "local_start_time",
+            "timestamp_start",
+            "timestamp_end",
+            "float_value",
+            "local_timestamp_start",
         ]
     ].copy()
-    df = df.rename(columns={"doubleValue": "Steps"})
+    df = df.rename(columns={"float_value": "Steps"})
 
     # Compute duration and apply cutoff
-    df["start_end"] = (df["endTimestamp"] - df["startTimestamp"]).dt.total_seconds()
+    df["start_end"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
     df = df[df["start_end"] <= cutoff_seconds].copy()
 
     # Compute SPM (Steps Per Minute)
     df["duration"] = (
-        (df["endTimestamp"] - df["startTimestamp"])
+        (df["timestamp_end"] - df["timestamp_start"])
         .dt.total_seconds()
         .fillna(0)
         .astype(int)
@@ -749,21 +783,21 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     df["SPM"] = df["SPM"].replace([np.inf, -np.inf], np.nan).fillna(0)
 
     # Expand to 1-minute resolution
-    df["startTimestamp_minute"] = df["startTimestamp"].dt.round("min")
+    df["timestamp_start_minute"] = df["timestamp_start"].dt.round("min")
     df["duration_minutes"] = np.maximum(1, (df["duration"] / 60).round(0).astype(int))
 
     df_expanded = df.loc[df.index.repeat(df["duration_minutes"])].copy()
     df_expanded["time_offset"] = df_expanded.groupby(level=0).cumcount()
-    df_expanded["timestamp"] = df_expanded["startTimestamp_minute"] + pd.to_timedelta(
+    df_expanded["timestamp"] = df_expanded["timestamp_start_minute"] + pd.to_timedelta(
         df_expanded["time_offset"], unit="min"
     )
-    df_expanded["local_timestamp"] = df_expanded["local_start_time"].dt.round(
+    df_expanded["local_timestamp"] = df_expanded["local_timestamp_start"].dt.round(
         "min"
     ) + pd.to_timedelta(df_expanded["time_offset"], unit="min")
 
     # Deduplicate overlapping entries via mean
     df_avg = (
-        df_expanded.groupby(["customer", "timestamp"])
+        df_expanded.groupby(["id", "timestamp"], observed=True)
         .agg(
             for_id=("for_id", "first"),
             SPM=("SPM", "mean"),
@@ -779,7 +813,7 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
 
     # Daily aggregation
     df_steps_daily = (
-        df_avg.groupby(["customer", "local_day"])
+        df_avg.groupby(["id", "local_day"], observed=True)
         .agg(
             for_id=("for_id", "first"),
             StepsInDay=("SPM", "sum"),
@@ -807,7 +841,7 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
 
     # Hourly aggregation (intermediate step)
     df_hourly = (
-        df_avg.groupby(["customer", "local_hour"])
+        df_avg.groupby(["id", "local_hour"], observed=True)
         .agg(
             local_day=("local_day", "first"),
             Steps_inHour=("SPM", "sum"),
@@ -823,7 +857,7 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
 
     # Merge hourly stats into daily
     hourly_agg = (
-        df_hourly.groupby(["customer", "local_day"])
+        df_hourly.groupby(["id", "local_day"], observed=True)
         .agg(
             StepsPerHour=("Steps_inHour", "mean"),
             SPM_max_avgbyHour=("SPM_max_inHour", "mean"),
@@ -836,15 +870,15 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     )
 
     df_steps_daily = df_steps_daily.merge(
-        hourly_agg, on=["customer", "local_day"], how="left"
+        hourly_agg, on=["id", "local_day"], how="left"
     )
 
     # Most active hour
     most_active = df_hourly.loc[
-        df_hourly.groupby(["customer", "local_day"])["Steps_inHour"].idxmax()
+        df_hourly.groupby(["id", "local_day"], observed=True)["Steps_inHour"].idxmax()
     ][
         [
-            "customer",
+            "id",
             "local_day",
             "Steps_inHour",
             "clock_hour",
@@ -860,13 +894,13 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
         }
     )
     df_steps_daily = df_steps_daily.merge(
-        most_active, on=["customer", "local_day"], how="left"
+        most_active, on=["id", "local_day"], how="left"
     )
 
     # Percentile hours (when 25%, 50%, 75% of daily steps are reached)
-    df_hourly["Steps_inHour_cumsum"] = df_hourly.groupby(["customer", "local_day"])[
-        "Steps_inHour"
-    ].cumsum()
+    df_hourly["Steps_inHour_cumsum"] = df_hourly.groupby(
+        ["id", "local_day"], observed=True
+    )["Steps_inHour"].cumsum()
 
     def percentile_hours(group, percentiles=(0.25, 0.5, 0.75)):
         total_steps = group["Steps_inHour_cumsum"].iloc[-1]
@@ -883,13 +917,11 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
         return pd.Series(result)
 
     pct_hours = (
-        df_hourly.groupby(["customer", "local_day"])
+        df_hourly.groupby(["id", "local_day"], observed=True)
         .apply(percentile_hours, include_groups=False)
         .reset_index()
     )
-    df_steps_daily = df_steps_daily.merge(
-        pct_hours, on=["customer", "local_day"], how="left"
-    )
+    df_steps_daily = df_steps_daily.merge(pct_hours, on=["id", "local_day"], how="left")
 
     return df_steps_daily
 
@@ -914,19 +946,19 @@ def aggregate_activity_daily(df_backup, exclude=None):
         exclude = ["SLEEP", "REST"]
 
     # Filter ActivityType data
-    df = df_backup[df_backup["type"] == "ActivityType"].copy()
-    df["activity_type_str"] = df["longValue"].map(MAP_ACTIVITYTYPE)
+    df = df_backup[df_backup["modality"] == "ActivityType"].copy()
+    df["activity_type_str"] = df["float_value"].map(MAP_ACTIVITYTYPE)
     df = df[~df["activity_type_str"].isin(exclude)].copy()
 
     # Add local day and duration
-    df["local_day"] = df["local_start_time"].dt.floor("D")
+    df["local_day"] = df["local_timestamp_start"].dt.floor("D")
     df["duration"] = (
-        df["endTimestamp"] - df["startTimestamp"]
+        df["timestamp_end"] - df["timestamp_start"]
     ).dt.total_seconds() / 60  # minutes
 
-    # Aggregate by customer, day, activity type
+    # Aggregate by id, day, activity type
     df_agg = (
-        df.groupby(["customer", "local_day", "activity_type_str"])
+        df.groupby(["id", "local_day", "activity_type_str"], observed=True)
         .agg(
             total_duration=("duration", "sum"),
             n_sessions=("duration", "count"),
@@ -938,7 +970,7 @@ def aggregate_activity_daily(df_backup, exclude=None):
 
     # Pivot to wide format
     df_wide = df_agg.pivot_table(
-        index=["customer", "local_day"],
+        index=["id", "local_day"],
         columns="activity_type_str",
         values=[
             "total_duration",
@@ -947,6 +979,7 @@ def aggregate_activity_daily(df_backup, exclude=None):
             "max_session_duration",
         ],
         fill_value=0,
+        observed=True,
     )
 
     # Flatten column names
@@ -970,18 +1003,18 @@ def aggregate_elevation_daily(df_backup, cutoff_hours=4):
     Returns
     -------
     pd.DataFrame
-        Daily elevation aggregates with columns: customer, local_day, total_elevation_gain
+        Daily elevation aggregates with columns: id, local_day, total_elevation_gain
     """
-    df = df_backup[df_backup["type"] == "ElevationGain"].copy()
-    df["local_day"] = df["local_start_time"].dt.floor("D")
-    df["start_end"] = (df["endTimestamp"] - df["startTimestamp"]).dt.total_seconds()
+    df = df_backup[df_backup["modality"] == "ElevationGain"].copy()
+    df["local_day"] = df["local_timestamp_start"].dt.floor("D")
+    df["start_end"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
 
     # Apply cutoff
     df = df[df["start_end"] <= cutoff_hours * 3600].copy()
 
     df_elevation_daily = (
-        df.groupby(["customer", "local_day"])
-        .agg(total_elevation_gain=("doubleValue", "sum"))
+        df.groupby(["id", "local_day"], observed=True)
+        .agg(total_elevation_gain=("float_value", "sum"))
         .reset_index()
     )
 
@@ -1000,14 +1033,14 @@ def aggregate_floors_daily(df_backup):
     Returns
     -------
     pd.DataFrame
-        Daily floors aggregates with columns: customer, local_day, total_floors_climbed
+        Daily floors aggregates with columns: id, local_day, total_floors_climbed
     """
-    df = df_backup[df_backup["type"] == "FloorsClimbed"].copy()
-    df["local_day"] = df["local_start_time"].dt.floor("D")
+    df = df_backup[df_backup["modality"] == "FloorsClimbed"].copy()
+    df["local_day"] = df["local_timestamp_start"].dt.floor("D")
 
     df_floors_daily = (
-        df.groupby(["customer", "local_day"])
-        .agg(total_floors_climbed=("longValue", "sum"))
+        df.groupby(["id", "local_day"], observed=True)
+        .agg(total_floors_climbed=("float_value", "sum"))
         .reset_index()
     )
 
@@ -1034,7 +1067,7 @@ def aggregate_all_passive(df_backup, **kwargs):
     Returns
     -------
     pd.DataFrame
-        Merged daily aggregates from all modalities on ["customer", "local_day"]
+        Merged daily aggregates from all modalities on ["id", "local_day"]
     """
     logging.info("Aggregating sleep data...")
     df_sleep = aggregate_sleep_daily(
@@ -1066,13 +1099,13 @@ def aggregate_all_passive(df_backup, **kwargs):
     logging.info("Aggregating floors data...")
     df_floors = aggregate_floors_daily(df_backup)
 
-    # Merge all DataFrames on ["customer", "local_day"]
+    # Merge all DataFrames on ["id", "local_day"]
     logging.info("Merging all modalities...")
-    df_all = df_sleep.merge(df_hr, on=["customer", "local_day"], how="outer")
-    df_all = df_all.merge(df_steps, on=["customer", "local_day"], how="outer")
-    df_all = df_all.merge(df_activity, on=["customer", "local_day"], how="outer")
-    df_all = df_all.merge(df_elevation, on=["customer", "local_day"], how="outer")
-    df_all = df_all.merge(df_floors, on=["customer", "local_day"], how="outer")
+    df_all = df_sleep.merge(df_hr, on=["id", "local_day"], how="outer")
+    df_all = df_all.merge(df_steps, on=["id", "local_day"], how="outer")
+    df_all = df_all.merge(df_activity, on=["id", "local_day"], how="outer")
+    df_all = df_all.merge(df_elevation, on=["id", "local_day"], how="outer")
+    df_all = df_all.merge(df_floors, on=["id", "local_day"], how="outer")
 
     logging.info(f"Final shape: {df_all.shape}")
 

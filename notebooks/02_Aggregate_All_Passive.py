@@ -33,8 +33,8 @@ from pathlib import Path
 
 
 
-# # %load_ext autoreload
-# # %autoreload 2
+# %load_ext autoreload
+# %autoreload 2
 import logging
 
 # Configure logging
@@ -88,12 +88,24 @@ df_backup = pd.read_feather(backup_path)
 print(df_backup.shape)
 df_backup.head()
 
+# %%
+debug = True
+if debug:
+    print("!!!!!!!!!!!!!DEBUG MODE ON!!!!!!!!!!!!!")
+    ids_to_keep = df_backup["id"].unique()[100:110]  # Keep only the first 10 unique IDs for debugging
+    df_backup = df_backup[df_backup["id"].isin(ids_to_keep)].copy()
+    print(f"Unique IDs kept for debugging: {ids_to_keep}")
+    print(f"Data shape after filtering for debug: {df_backup.shape}")
+
+# %%
+df_backup.head()
+
 # %% [markdown]
 # ### Filter passive records by EMA post end (+14 days)
 
 # %%
-# check how many unique days of data we have per customers
-df_backup.groupby("customer")["startTimestamp_day"].nunique().sort_values(ascending=False)
+# check how many unique days of data we have per ids
+df_backup.groupby("id")["start_date"].nunique().sort_values(ascending=False)
 
 
 # %% [markdown]
@@ -196,10 +208,10 @@ if "for_id" not in df_backup.columns:
 
 if "startTimestamp" in df_backup.columns:
     ts_col = "startTimestamp"
-# elif "local_start_time" in df_backup.columns:
-#     ts_col = "local_start_time"
+# elif "local_timestamp_start" in df_backup.columns:
+#     ts_col = "local_timestamp_start"
 else:
-    raise KeyError("df_backup is missing both startTimestamp and local_start_time")
+    raise KeyError("df_backup is missing both startTimestamp and local_timestamp_start")
 
 last_avail_redcap = last_avail_redcap.copy()
 last_avail_redcap["last_avail_date_redcap"] = pd.to_datetime(
@@ -232,7 +244,7 @@ print(f"Records after REDCap +21d filtering: {len(df_backup):_d}")
 print(f"Records removed: {n_records_before - len(df_backup):_d}")
 
 # %%
-df_backup.groupby("customer")["startTimestamp_day"].nunique().sort_values(ascending=False)
+df_backup.groupby("id")["start_date"].nunique().sort_values(ascending=False)
 
 # %% [markdown]
 # #### Filter by monitoring spreadsheet
@@ -276,8 +288,8 @@ if "for_id" not in df_backup.columns:
     raise KeyError("df_backup is missing required column: for_id")
 
 df_backup["for_id"] = df_backup["for_id"].astype(str).str.strip()
-df_backup["local_start_time"] = pd.to_datetime(df_backup["local_start_time"], errors="coerce")
-df_backup["local_day_filter"] = df_backup["local_start_time"].dt.date
+df_backup["local_timestamp_start"] = pd.to_datetime(df_backup["local_timestamp_start"], errors="coerce")
+df_backup["local_day_filter"] = df_backup["local_timestamp_start"].dt.date
 
 n_records_before = len(df_backup)
 df_backup = df_backup.merge(df_post_end[["for_id", "post_cutoff_day"]], on="for_id", how="left")
@@ -293,27 +305,29 @@ print(f"Records after post-end filtering: {len(df_backup)}")
 print(f"Records removed: {n_records_before - len(df_backup)}")
 
 # %%
-df_backup
+df_backup.head()
 
 # %%
-df_backup.groupby("customer")["startTimestamp_day"].nunique().sort_values(ascending=False)
+# df_backup.groupby("id")["start_date"].nunique().sort_values(ascending=False)
+tmp_for_id = df_backup.groupby("for_id")["start_date"].nunique().sort_values(ascending=False)
+
+# %%
+for forid, count in tmp_for_id.items():
+    print(f"{forid}: {count} unique days")
 
 # %% [markdown]
 # ### check the other types
 
 # %%
-2+2
-
-# %%
 type_coverage = (
-    df_backup.groupby("type")["customer"].nunique().reset_index(name="unique_customers")
+    df_backup.groupby("modality")["id"].nunique().reset_index(name="unique_ids")
 )
-type_coverage["percentage_customers"] = (
-    type_coverage["unique_customers"] / df_backup["customer"].nunique()
+type_coverage["percentage_ids"] = (
+    type_coverage["unique_ids"] / df_backup["id"].nunique()
 ) * 100
 type_coverage = type_coverage.merge(
-    df_backup["type"].value_counts().reset_index(name="total_entries"),
-    on="type",
+    df_backup["modality"].value_counts().reset_index(name="total_entries"),
+    on="modality",
     how="left",
 )
 type_coverage.sort_values(by="total_entries", ascending=False, inplace=True)
@@ -324,11 +338,11 @@ type_coverage
 # %%
 
 # %%
-df_backup.groupby("customer")["type"].value_counts()
+df_backup.groupby("id")["modality"].value_counts()
 
-print(f"Total customer-type combinations: {len(df_backup.groupby('customer')['type'].value_counts())}")
-print(f"Unique customers: {df_backup['customer'].nunique()}")
-print(f"Unique types: {df_backup['type'].nunique()}")
+print(f"Total id-type combinations: {len(df_backup.groupby('id')["modality"].value_counts())}")
+print(f"Unique ids: {df_backup['id'].nunique()}")
+print(f"Unique types: {df_backup["modality"].nunique()}")
 
 # %% [markdown]
 # ## Single modality aggregations
@@ -348,10 +362,16 @@ df_sleep_daily.head()
 
 # %%
 df_hr_daily = aggregate_hr_daily(df_backup, include_zero_hours=False)
-df_hr_daily.head()
+
 
 # %%
-df_hr_daily
+pd.set_option('display.max_columns', None)
+print(df_hr_daily.head())
+# df_backup.head()
+
+# %%
+print(df_hr_daily.shape)
+df_hr_daily.head()
 
 # %%
 
@@ -363,6 +383,7 @@ df_hr_daily
 
 # %%
 df_steps_daily = aggregate_steps_daily(df_backup)
+# TODO add the number of hours with zero steps per day as a feature / number of hours with steps > 0 per day
 df_steps_daily.head()
 
 # %%
@@ -391,9 +412,9 @@ df_floors_daily.head()
 
 # %%
 def merge_dataframes(
-    dataframes: list[pd.DataFrame], on=("customer", "local_day")
+    dataframes: list[pd.DataFrame], on=("id", "local_day")
 ) -> pd.DataFrame:
-    """Merge a list of dataframes on 'customer' and 'local_day' using outer join."""
+    """Merge a list of dataframes on 'id' and 'local_day' using outer join."""
 
     merged_df = reduce(
         lambda left, right: pd.merge(left, right, on=list(on), how="outer"),
@@ -405,11 +426,11 @@ def merge_dataframes(
 # %%
 # # Aggregate all passive data
 
-# df_daily = df_sleep_daily.merge(df_hr_daily, on=["customer", "local_day"], how="outer")
-# df_daily = df_daily.merge(df_steps_daily, on=["customer", "local_day"], how="outer")
-# df_daily = df_daily.merge(df_activity_daily, on=["customer", "local_day"], how="outer")
-# df_daily = df_daily.merge(df_elevation_daily, on=["customer", "local_day"], how="outer")
-# df_daily = df_daily.merge(df_floors_daily, on=["customer", "local_day"], how="outer")
+# df_daily = df_sleep_daily.merge(df_hr_daily, on=["id", "local_day"], how="outer")
+# df_daily = df_daily.merge(df_steps_daily, on=["id", "local_day"], how="outer")
+# df_daily = df_daily.merge(df_activity_daily, on=["id", "local_day"], how="outer")
+# df_daily = df_daily.merge(df_elevation_daily, on=["id", "local_day"], how="outer")
+# df_daily = df_daily.merge(df_floors_daily, on=["id", "local_day"], how="outer")
 
 # %%
 # or just call aggregate_all_passive
@@ -429,7 +450,7 @@ df_daily
 # %%
 print(f"Total rows: {len(df_daily)}")
 print(f"Total columns: {len(df_daily.columns)}")
-print(f"Unique customers: {df_daily['customer'].nunique()}")
+print(f"Unique ids: {df_daily['id'].nunique()}")
 print(f"Date range: {df_daily['local_day'].min()} to {df_daily['local_day'].max()}")
 
 # %%
@@ -437,13 +458,29 @@ df_daily
 
 # %%
 # save the aggregated daily data
-output_path = "/sc-projects/sc-proj-cc15-preact/SP6/preprocessed" + "/passive_daily_aggregated.feather"
+passive_daily_dir = Path("/sc-projects/sc-proj-cc15-preact/SP6/preprocessed/passive/daily/")
+output_path = passive_daily_dir / "daily_aggregated_all_passive.feather"
 
 
 # %%
 
 df_daily.to_feather(output_path)
 print(f"Aggregated daily data saved to: {output_path}")
+
+# %%
+for key, df in {
+    "sleep": df_sleep_daily,
+    "hr": df_hr_daily,
+    "steps": df_steps_daily,
+    "activity": df_activity_daily,
+    "elevation": df_elevation_daily,
+    "floors": df_floors_daily,
+}.items():
+    print(f"{key}: {len(df)} rows, columns: {list(df.columns)}")
+
+    single_save_path = passive_daily_dir / f"daily_agg_{key}.parquet"
+    df.to_parquet(single_save_path)
+    print(f"{key} daily data saved to: {single_save_path}")
 
 # %%
 df_daily = pd.read_feather(output_path)
@@ -459,7 +496,7 @@ plt.plot(entries_per_day['local_day'], entries_per_day['entries_per_day'],
          color='#3498db', linewidth=1.5, alpha=0.8)
 plt.fill_between(entries_per_day['local_day'], entries_per_day['entries_per_day'], 
                  alpha=0.3, color='#3498db')
-plt.title('Number of Customer with any records per Day', fontsize=14, fontweight='bold')
+plt.title('Number of id with any records per Day', fontsize=14, fontweight='bold')
 plt.xlabel('Date', fontsize=11)
 plt.ylabel('Number of Entries', fontsize=11)
 plt.legend()
@@ -469,7 +506,7 @@ plt.tight_layout()
 plt.show()
 
 # %%
-df_daily.groupby("customer").agg({"local_day": ["min", "max", "count"]})
+df_daily.groupby("id").agg({"local_day": ["min", "max", "count"]})
 
 # %%
 # Check days without HR data (HR_raw_records is NA)
@@ -479,17 +516,17 @@ print("=" * 60)
 print("DAYS WITHOUT HR DATA (NA) ANALYSIS")
 print("=" * 60)
 print(f"Total days without HR data: {len(df_no_hr):,}")
-print(f"Unique customers affected: {df_no_hr['customer'].nunique()}")
+print(f"Unique ids affected: {df_no_hr['id'].nunique()}")
 print(f"Date range: {df_no_hr['local_day'].min()} to {df_no_hr['local_day'].max()}")
 print("=" * 60)
 
-# Per-customer breakdown
-no_hr_per_customer = df_no_hr.groupby('customer').size().reset_index(name='days_without_hr')
-print(f"\nDays without HR per customer:")
-print(f"  Mean: {no_hr_per_customer['days_without_hr'].mean():.1f}")
-print(f"  Median: {no_hr_per_customer['days_without_hr'].median():.1f}")
-print(f"  Min: {no_hr_per_customer['days_without_hr'].min()}")
-print(f"  Max: {no_hr_per_customer['days_without_hr'].max()}")
+# Per-id breakdown
+no_hr_per_id = df_no_hr.groupby('id').size().reset_index(name='days_without_hr')
+print(f"\nDays without HR per id:")
+print(f"  Mean: {no_hr_per_id['days_without_hr'].mean():.1f}")
+print(f"  Median: {no_hr_per_id['days_without_hr'].median():.1f}")
+print(f"  Min: {no_hr_per_id['days_without_hr'].min()}")
+print(f"  Max: {no_hr_per_id['days_without_hr'].max()}")
 print("=" * 60)
 
 # Check what other data exists on days without HR
@@ -509,24 +546,24 @@ print("=" * 60)
 fig, axes = plt.subplots(2, 1, figsize=(16, 10))
 fig.suptitle('Days Without HR Data Analysis', fontsize=14, fontweight='bold')
 
-# Top: Daily count of customers without HR
-hr_na_per_day = df_no_hr.groupby('local_day').size().reset_index(name='n_customers_no_hr')
-axes[0].bar(hr_na_per_day['local_day'], hr_na_per_day['n_customers_no_hr'],
+# Top: Daily count of ids without HR
+hr_na_per_day = df_no_hr.groupby('local_day').size().reset_index(name='n_ids_no_hr')
+axes[0].bar(hr_na_per_day['local_day'], hr_na_per_day['n_ids_no_hr'],
             color='#e74c3c', alpha=0.7, edgecolor='black', width=0.8)
-axes[0].set_ylabel('Number of Customers Without HR', fontsize=11)
-axes[0].set_title('Daily Count of Customers Without HR Data', fontsize=12, fontweight='bold')
+axes[0].set_ylabel('Number of ids Without HR', fontsize=11)
+axes[0].set_title('Daily Count of ids Without HR Data', fontsize=12, fontweight='bold')
 axes[0].grid(alpha=0.3, axis='y')
 plt.setp(axes[0].xaxis.get_majorticklabels(), rotation=45)
 
-# Bottom: Per-customer days without HR (sorted)
-no_hr_sorted = no_hr_per_customer.sort_values('days_without_hr', ascending=True)
+# Bottom: Per-id days without HR (sorted)
+no_hr_sorted = no_hr_per_id.sort_values('days_without_hr', ascending=True)
 axes[1].barh(range(len(no_hr_sorted)), no_hr_sorted['days_without_hr'],
              color='#e74c3c', alpha=0.7, edgecolor='black')
 axes[1].set_yticks(range(len(no_hr_sorted)))
-axes[1].set_yticklabels(no_hr_sorted['customer'], fontsize=8)
+axes[1].set_yticklabels(no_hr_sorted['id'], fontsize=8)
 axes[1].set_xlabel('Days Without HR Data', fontsize=11)
-axes[1].set_ylabel('Customer ID', fontsize=11)
-axes[1].set_title('Days Without HR Data per Customer', fontsize=12, fontweight='bold')
+axes[1].set_ylabel('id ID', fontsize=11)
+axes[1].set_title('Days Without HR Data per id', fontsize=12, fontweight='bold')
 axes[1].grid(alpha=0.3, axis='x')
 
 plt.tight_layout()
@@ -535,53 +572,53 @@ plt.show()
 # %%
 # Sample some days without HR to inspect what data IS available
 print("Sample of days WITHOUT HR data (first 20 rows):")
-sample_cols = ['customer', 'local_day', 'HR_raw_records', 'SPM_count', 
+sample_cols = ['id', 'local_day', 'HR_raw_records', 'SPM_count', 
                'longest_total_sleep_time', 'ACTIVE_n_sessions']
 available_sample_cols = [col for col in sample_cols if col in df_no_hr.columns]
 df_no_hr[available_sample_cols].head(20)
 
 # %%
-# Per-customer: percentage of available days with NO HR data
-customer_hr_na_pct = df_daily.groupby('customer').agg(
+# Per-id: percentage of available days with NO HR data
+id_hr_na_pct = df_daily.groupby('id').agg(
     total_days=('local_day', 'count'),
     days_with_na=('HR_raw_records', lambda x: x.isna().sum())
 ).reset_index()
-customer_hr_na_pct['na_percentage'] = (customer_hr_na_pct['days_with_na'] / customer_hr_na_pct['total_days']) * 100
+id_hr_na_pct['na_percentage'] = (id_hr_na_pct['days_with_na'] / id_hr_na_pct['total_days']) * 100
 
 # Histogram
 fig, ax = plt.subplots(figsize=(12, 6))
-ax.hist(customer_hr_na_pct['na_percentage'], bins=100, color='#e74c3c', edgecolor='black', alpha=0.7)
-ax.axvline(customer_hr_na_pct['na_percentage'].mean(), color='darkred', linestyle='--', linewidth=2, 
-           label=f"Mean: {customer_hr_na_pct['na_percentage'].mean():.1f}%")
-ax.axvline(customer_hr_na_pct['na_percentage'].median(), color='darkgreen', linestyle='--', linewidth=2, 
-           label=f"Median: {customer_hr_na_pct['na_percentage'].median():.1f}%")
+ax.hist(id_hr_na_pct['na_percentage'], bins=100, color='#e74c3c', edgecolor='black', alpha=0.7)
+ax.axvline(id_hr_na_pct['na_percentage'].mean(), color='darkred', linestyle='--', linewidth=2, 
+           label=f"Mean: {id_hr_na_pct['na_percentage'].mean():.1f}%")
+ax.axvline(id_hr_na_pct['na_percentage'].median(), color='darkgreen', linestyle='--', linewidth=2, 
+           label=f"Median: {id_hr_na_pct['na_percentage'].median():.1f}%")
 ax.set_xlabel('Percentage of Days Without HR Data (%)', fontsize=11)
-ax.set_ylabel('Number of Customers', fontsize=11)
-ax.set_title('Distribution of HR Data Missingness per Customer', fontsize=12, fontweight='bold')
+ax.set_ylabel('Number of ids', fontsize=11)
+ax.set_title('Distribution of HR Data Missingness per id', fontsize=12, fontweight='bold')
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
 plt.show()
 
 print(f"\nSummary Statistics:")
-print(f"Customers with 0% NA (complete HR coverage): {(customer_hr_na_pct['na_percentage'] == 0).sum()}")
-print(f"Customers with 100% NA (no HR data): {(customer_hr_na_pct['na_percentage'] == 100).sum()}")
-print(f"Customers with >50% NA: {(customer_hr_na_pct['na_percentage'] > 50).sum()}")
+print(f"ids with 0% NA (complete HR coverage): {(id_hr_na_pct['na_percentage'] == 0).sum()}")
+print(f"ids with 100% NA (no HR data): {(id_hr_na_pct['na_percentage'] == 100).sum()}")
+print(f"ids with >50% NA: {(id_hr_na_pct['na_percentage'] > 50).sum()}")
 
 # %%
-# Number of days with HR data per customer
-# #! not counting customers with zero days of HR data 
-days_per_customer = df_daily[df_daily['HR_raw_records'].notna()].groupby('customer').size().reset_index(name='n_days')
+# Number of days with HR data per id
+# #! not counting ids with zero days of HR data 
+days_per_id = df_daily[df_daily['HR_raw_records'].notna()].groupby('id').size().reset_index(name='n_days')
 
 fig, ax = plt.subplots(figsize=(12, 6))
-ax.hist(days_per_customer['n_days'], bins=30, color='#e74c3c', edgecolor='black', alpha=0.7)
-ax.axvline(days_per_customer['n_days'].mean(), color='darkred', linestyle='--', linewidth=2, 
-           label=f"Mean: {days_per_customer['n_days'].mean():.1f} days")
-ax.axvline(days_per_customer['n_days'].median(), color='darkgreen', linestyle='--', linewidth=2, 
-           label=f"Median: {days_per_customer['n_days'].median():.1f} days")
+ax.hist(days_per_id['n_days'], bins=30, color='#e74c3c', edgecolor='black', alpha=0.7)
+ax.axvline(days_per_id['n_days'].mean(), color='darkred', linestyle='--', linewidth=2, 
+           label=f"Mean: {days_per_id['n_days'].mean():.1f} days")
+ax.axvline(days_per_id['n_days'].median(), color='darkgreen', linestyle='--', linewidth=2, 
+           label=f"Median: {days_per_id['n_days'].median():.1f} days")
 ax.set_xlabel('Number of Days with HR Data', fontsize=11)
-ax.set_ylabel('Number of Customers', fontsize=11)
-ax.set_title('Distribution of Recording Days per Customer', fontsize=12, fontweight='bold')
+ax.set_ylabel('Number of ids', fontsize=11)
+ax.set_title('Distribution of Recording Days per id', fontsize=12, fontweight='bold')
 ax.legend()
 ax.grid(alpha=0.3)
 plt.tight_layout()
@@ -619,16 +656,16 @@ plt.tight_layout()
 plt.show()
 
 # %%
-# 2. Per-customer coverage heatmap (temporal view)
+# 2. Per-id coverage heatmap (temporal view)
 fig, ax = plt.subplots(figsize=(20, 10))
 
-# Prepare data - pivot to customer x day matrix
-customers_to_plot = sorted(df_daily['customer'].unique())[:20]  # First 20 customers
-df_hr_subset = df_daily[df_daily['customer'].isin(customers_to_plot)].copy()
+# Prepare data - pivot to id x day matrix
+ids_to_plot = sorted(df_daily['id'].unique())[:20]  # First 20 ids
+df_hr_subset = df_daily[df_daily['id'].isin(ids_to_plot)].copy()
 
-# Pivot: rows = customers, columns = days
+# Pivot: rows = ids, columns = days
 heatmap_data = df_hr_subset.pivot_table(
-    index='customer',
+    index='id',
     columns='local_day',
     values='HR_seconds_hours_with_data',
     aggfunc='first'
@@ -638,20 +675,20 @@ heatmap_data = df_hr_subset.pivot_table(
 sns.heatmap(heatmap_data, cmap='YlOrRd', annot=False, fmt='.0f', 
             cbar_kws={'label': 'Hours with HR Data (0-24)'},
             linewidths=0.5, ax=ax, vmin=0, vmax=24)
-ax.set_title('HR Data Coverage Heatmap (First 20 Customers)', fontsize=14, fontweight='bold')
+ax.set_title('HR Data Coverage Heatmap (First 20 ids)', fontsize=14, fontweight='bold')
 ax.set_xlabel('Date')
-ax.set_ylabel('Customer ID')
+ax.set_ylabel('id ID')
 plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
 plt.tight_layout()
 plt.show()
 
 # %%
-# 3. Per-customer summary boxplots
+# 3. Per-id summary boxplots
 fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-fig.suptitle('HR Coverage Distribution Across Customers', fontsize=14, fontweight='bold')
+fig.suptitle('HR Coverage Distribution Across ids', fontsize=14, fontweight='bold')
 
-# Compute per-customer medians
-customer_summary = df_daily.groupby('customer').agg(
+# Compute per-id medians
+id_summary = df_daily.groupby('id').agg(
     median_raw_records=('HR_raw_records', 'median'),
     median_hours_with_records=('HR_raw_hours_with_records', 'median'),
     median_seconds_per_hour=('HR_seconds_per_hour_mean', 'median')
@@ -664,7 +701,7 @@ box_configs = [
 ]
 
 for col, title, color, ax in box_configs:
-    data = customer_summary[col].dropna()
+    data = id_summary[col].dropna()
     if len(data) > 0:
         bp = ax.boxplot([data], patch_artist=True, widths=0.6)
         bp['boxes'][0].set_facecolor(color)
@@ -673,7 +710,7 @@ for col, title, color, ax in box_configs:
             plt.setp(bp[element], color='black')
         ax.set_title(title, fontsize=11, fontweight='bold')
         ax.set_ylabel('Value')
-        ax.set_xticklabels(['All Customers'])
+        ax.set_xticklabels(['All ids'])
         ax.grid(axis='y', alpha=0.3)
         
         # Add summary stats as text
@@ -688,24 +725,24 @@ plt.tight_layout()
 plt.show()
 
 # %%
-# 4. Time-series coverage plots (sample customers)
+# 4. Time-series coverage plots (sample ids)
 fig, axes = plt.subplots(2, 1, figsize=(18, 10))
-fig.suptitle('HR Coverage Over Time (Sample Customers)', fontsize=14, fontweight='bold')
+fig.suptitle('HR Coverage Over Time (Sample ids)', fontsize=14, fontweight='bold')
 
-sample_customers = df_daily['customer'].unique()[:5]  # First 5 customers
+sample_ids = df_daily['id'].unique()[:5]  # First 5 ids
 colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6']
 
-for i, customer in enumerate(sample_customers):
-    customer_data = df_daily[df_daily['customer'] == customer].sort_values('local_day')
+for i, id in enumerate(sample_ids):
+    id_data = df_daily[df_daily['id'] == id].sort_values('local_day')
     
     # Plot 1: Hours with records
-    axes[0].plot(customer_data['local_day'], customer_data['HR_raw_hours_with_records'],
-                 marker='o', markersize=4, alpha=0.7, label=f'Customer {customer}',
+    axes[0].plot(id_data['local_day'], id_data['HR_raw_hours_with_records'],
+                 marker='o', markersize=4, alpha=0.7, label=f'id {id}',
                  color=colors[i])
     
     # Plot 2: Mean seconds per hour
-    axes[1].plot(customer_data['local_day'], customer_data['HR_seconds_per_hour_mean'],
-                 marker='o', markersize=4, alpha=0.7, label=f'Customer {customer}',
+    axes[1].plot(id_data['local_day'], id_data['HR_seconds_per_hour_mean'],
+                 marker='o', markersize=4, alpha=0.7, label=f'id {id}',
                  color=colors[i])
 
 axes[0].set_title('Hours with HR Records per Day', fontsize=12, fontweight='bold')
@@ -774,12 +811,12 @@ plt.show()
 # 6. Population-level daily coverage over time
 fig, ax = plt.subplots(figsize=(16, 6))
 
-# Aggregate across all customers per day
+# Aggregate across all ids per day
 daily_population = df_daily.groupby('local_day').agg(
     median_hours=('HR_seconds_hours_with_data', 'median'),
     q25_hours=('HR_seconds_hours_with_data', lambda x: x.quantile(0.25)),
     q75_hours=('HR_seconds_hours_with_data', lambda x: x.quantile(0.75)),
-    n_customers=('customer', 'nunique')
+    n_ids=('id', 'nunique')
 ).reset_index()
 
 # Plot median with IQR shading
@@ -798,13 +835,221 @@ ax.legend(loc='best')
 ax.grid(alpha=0.3)
 plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
 
-# Add secondary y-axis for number of customers
+# Add secondary y-axis for number of ids
 ax2 = ax.twinx()
-ax2.plot(daily_population['local_day'], daily_population['n_customers'],
-         color='#3498db', linewidth=1, linestyle='--', alpha=0.6, label='N Customers')
-ax2.set_ylabel('Number of Customers', fontsize=11, color='#3498db')
+ax2.plot(daily_population['local_day'], daily_population['n_ids'],
+         color='#3498db', linewidth=1, linestyle='--', alpha=0.6, label='N ids')
+ax2.set_ylabel('Number of ids', fontsize=11, color='#3498db')
 ax2.tick_params(axis='y', labelcolor='#3498db')
 ax2.legend(loc='upper right')
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# ### HR Gap Analysis
+
+# %%
+# HR Gap distributions
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+fig.suptitle('HR Record Gap Statistics (between consecutive raw records)', fontsize=14, fontweight='bold')
+
+gap_cols = [
+    ('HR_gap_max_seconds', 'Max Gap per Day', '#e74c3c'),
+    ('HR_gap_mean_seconds', 'Mean Gap per Day', '#c0392b'),
+    ('HR_gap_median_seconds', 'Median Gap per Day', '#e67e22'),
+]
+
+for idx, (col, title, color) in enumerate(gap_cols):
+    data = df_daily[col].dropna()
+    # clip at 99th percentile for visibility
+    clip_val = data.quantile(0.99)
+    axes[idx].hist(data.clip(upper=clip_val), bins=60, color=color, edgecolor='black', alpha=0.7)
+    axes[idx].axvline(data.median(), color='black', linestyle='--', linewidth=2,
+                      label=f'Median: {data.median():.0f}s')
+    axes[idx].set_title(title, fontsize=12, fontweight='bold')
+    axes[idx].set_xlabel('Seconds')
+    axes[idx].set_ylabel('Frequency')
+    axes[idx].legend()
+
+plt.tight_layout()
+plt.show()
+
+# %%
+# Per-id median HR gap
+id_gap = df_daily.groupby('id').agg(
+    median_max_gap=('HR_gap_max_seconds', 'median'),
+    median_mean_gap=('HR_gap_mean_seconds', 'median'),
+).reset_index()
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('Per-id Median HR Gaps', fontsize=14, fontweight='bold')
+
+for ax, col, title, color in [
+    (axes[0], 'median_max_gap',  'Hist of Daily MAX Gap', '#e74c3c'),
+    (axes[1], 'median_mean_gap', 'Hist of Daily MEAN Gap', '#c0392b'),
+]:
+    data_minutes = (id_gap[col].dropna() / 60)
+    ax.hist(data_minutes, bins=40, color=color, edgecolor='black', alpha=0.7)
+    ax.axvline(data_minutes.median(), color='black', linestyle='--', linewidth=2,
+               label=f'Median: {data_minutes.median():.1f}min')
+    ax.set_title(title, fontweight='bold')
+    ax.set_xlabel('Minutes')
+    ax.set_ylabel('Number of ids')
+    ax.legend()
+
+plt.tight_layout()
+plt.show()
+
+# %%
+# HR gap over time — does gap quality degrade?
+daily_gap_pop = df_daily.groupby('local_day').agg(
+    median_mean_gap=('HR_gap_mean_seconds', 'median'),
+    q25_mean_gap=('HR_gap_mean_seconds', lambda x: x.quantile(0.25)),
+    q75_mean_gap=('HR_gap_mean_seconds', lambda x: x.quantile(0.75)),
+).reset_index()
+
+fig, ax = plt.subplots(figsize=(16, 5))
+ax.plot(daily_gap_pop['local_day'], daily_gap_pop['median_mean_gap'],
+        color='#e74c3c', linewidth=2, label='Median')
+ax.fill_between(daily_gap_pop['local_day'],
+                daily_gap_pop['q25_mean_gap'], daily_gap_pop['q75_mean_gap'],
+                alpha=0.3, color='#e74c3c', label='IQR')
+ax.set_title('Population-Level Mean HR Gap Over Time', fontsize=14, fontweight='bold')
+ax.set_xlabel('Date')
+ax.set_ylabel('Mean Gap Between Records (seconds)')
+ax.legend()
+ax.grid(alpha=0.3)
+plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# ## Steps Coverage/Missingness Analysis
+
+# %%
+# Days without steps data
+df_no_steps = df_daily[df_daily['Steps_raw_records'].isna()].copy()
+
+print("=" * 60)
+print("DAYS WITHOUT STEPS DATA (NA) ANALYSIS")
+print("=" * 60)
+print(f"Total days without steps data: {len(df_no_steps):,}")
+print(f"Unique ids affected: {df_no_steps['id'].nunique()}")
+print(f"Date range: {df_no_steps['local_day'].min()} to {df_no_steps['local_day'].max()}")
+
+no_steps_per_id = df_no_steps.groupby('id').size().reset_index(name='days_without_steps')
+print(f"\nDays without steps per id:")
+print(f"  Mean: {no_steps_per_id['days_without_steps'].mean():.1f}")
+print(f"  Median: {no_steps_per_id['days_without_steps'].median():.1f}")
+print(f"  Min: {no_steps_per_id['days_without_steps'].min()}")
+print(f"  Max: {no_steps_per_id['days_without_steps'].max()}")
+print("=" * 60)
+
+# %%
+# Per-id steps missingness histogram
+id_steps_na_pct = df_daily.groupby('id').agg(
+    total_days=('local_day', 'count'),
+    days_with_na=('Steps_raw_records', lambda x: x.isna().sum())
+).reset_index()
+id_steps_na_pct['na_percentage'] = (id_steps_na_pct['days_with_na'] / id_steps_na_pct['total_days']) * 100
+
+fig, ax = plt.subplots(figsize=(12, 5))
+ax.hist(id_steps_na_pct['na_percentage'], bins=50, color='#3498db', edgecolor='black', alpha=0.7)
+ax.axvline(id_steps_na_pct['na_percentage'].mean(), color='darkblue', linestyle='--', linewidth=2,
+           label=f"Mean: {id_steps_na_pct['na_percentage'].mean():.1f}%")
+ax.axvline(id_steps_na_pct['na_percentage'].median(), color='darkgreen', linestyle='--', linewidth=2,
+           label=f"Median: {id_steps_na_pct['na_percentage'].median():.1f}%")
+ax.set_xlabel('Percentage of Days Without Steps Data (%)')
+ax.set_ylabel('Number of ids')
+ax.set_title('Distribution of Steps Data Missingness per id', fontsize=12, fontweight='bold')
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+print(f"ids with 0% NA: {(id_steps_na_pct['na_percentage'] == 0).sum()}")
+print(f"ids with 100% NA: {(id_steps_na_pct['na_percentage'] == 100).sum()}")
+print(f"ids with >50% NA: {(id_steps_na_pct['na_percentage'] > 50).sum()}")
+
+# %%
+# Steps coverage distributions (2x2)
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+fig.suptitle('Steps Coverage Metrics — Population Distributions', fontsize=14, fontweight='bold')
+
+steps_cov_cols = [
+    ('Steps_raw_records', 'Raw Records per Day', '#3498db'),
+    ('Steps_raw_hours_with_records', 'Hours with Records (0-24)', '#2980b9'),
+    ('Steps_minutes_per_hour_mean', 'Mean Minutes per Hour', '#1abc9c'),
+    ('Steps_gap_mean_seconds', 'Mean Gap Between Records (s)', '#16a085'),
+]
+
+for idx, (col, title, color) in enumerate(steps_cov_cols):
+    ax = axes[idx // 2, idx % 2]
+    data = df_daily[col].dropna()
+    clip_val = data.quantile(0.99)
+    bins=np.arange(0,24,1)
+    ax.hist(data.clip(upper=clip_val), bins=bins, color=color, edgecolor='black', alpha=0.7)
+    ax.axvline(data.median(), color='black', linestyle='--', linewidth=2,
+               label=f'Median: {data.median():.1f}')
+    ax.set_title(title, fontweight='bold')
+    ax.set_xlabel(col)
+    ax.legend()
+
+plt.tight_layout()
+plt.show()
+
+# %%
+# Steps coverage heatmap (first 20 ids)
+fig, ax = plt.subplots(figsize=(20, 10))
+ids_steps = sorted(df_daily['id'].unique())[:20]
+df_steps_sub = df_daily[df_daily['id'].isin(ids_steps)]
+
+heatmap_steps = df_steps_sub.pivot_table(
+    index='id', columns='local_day',
+    values='Steps_raw_hours_with_records', aggfunc='first'
+)
+sns.heatmap(heatmap_steps, cmap='YlGnBu', annot=False,
+            cbar_kws={'label': 'Hours with Steps Data (0-24)'},
+            linewidths=0.5, ax=ax, vmin=0, vmax=24)
+ax.set_title('Steps Data Coverage Heatmap (First 20 ids)', fontsize=14, fontweight='bold')
+ax.set_xlabel('Date')
+ax.set_ylabel('id ID')
+plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+# %%
+# Steps coverage vs total daily steps (sanity check)
+df_scatter_steps = df_daily.dropna(subset=['Steps_raw_hours_with_records', 'StepsInDay'])
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('Steps: Coverage vs. Volume', fontsize=14, fontweight='bold')
+
+axes[0].scatter(df_scatter_steps['Steps_raw_hours_with_records'], df_scatter_steps['StepsInDay'],
+                alpha=0.4, c='#3498db', s=15, edgecolors='black', linewidths=0.3)
+axes[0].set_xlabel('Hours with Steps Records')
+axes[0].set_ylabel('Total Steps in Day')
+axes[0].set_title('Coverage vs Total Steps')
+axes[0].grid(alpha=0.3)
+if len(df_scatter_steps) > 2:
+    r = df_scatter_steps['Steps_raw_hours_with_records'].corr(df_scatter_steps['StepsInDay'])
+    axes[0].annotate(f'r = {r:.3f}', xy=(0.05, 0.95), xycoords='axes fraction',
+                     fontsize=11, verticalalignment='top',
+                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+
+# Comparative: HR vs Steps hours with records per id-day
+df_both = df_daily.dropna(subset=['HR_raw_hours_with_records', 'Steps_raw_hours_with_records'])
+axes[1].scatter(df_both['HR_raw_hours_with_records'], df_both['Steps_raw_hours_with_records'],
+                alpha=0.3, c='#9b59b6', s=15, edgecolors='black', linewidths=0.3)
+axes[1].plot([0, 24], [0, 24], 'k--', alpha=0.4, label='y=x')
+axes[1].set_xlabel('HR Hours with Records')
+axes[1].set_ylabel('Steps Hours with Records')
+axes[1].set_title('HR vs Steps Coverage (per day)')
+axes[1].set_xlim(0, 24)
+axes[1].set_ylim(0, 24)
+axes[1].legend()
+axes[1].grid(alpha=0.3)
 
 plt.tight_layout()
 plt.show()
@@ -820,7 +1065,7 @@ df_daily = pd.read_feather(output_path)
 # %%
 df_viz = df_daily[
     [
-        "customer",
+        "id",
         "local_day",
         # sleep TODO - sleep session duration, total sleep time, num_sessions_in_day
         "HR_count",  # it is more the number of seconds with heart rate data than the number of records
@@ -853,24 +1098,24 @@ metrics_to_check = [
 
 # Create availability matrix
 availability_data = []
-for customer in sorted(df_viz['customer'].unique())[:20]:  # First 20 customers
-    customer_data = df_viz[df_viz['customer'] == customer].sort_values('local_day')
+for id in sorted(df_viz['id'].unique())[:20]:  # First 20 ids
+    id_data = df_viz[df_viz['id'] == id].sort_values('local_day')
     for metric in metrics_to_check:
         availability_data.append({
-            'customer': customer,
+            'id': id,
             'metric': metric,
-            'availability_pct': (customer_data[metric].notna().sum() / len(customer_data)) * 100
+            'availability_pct': (id_data[metric].notna().sum() / len(id_data)) * 100
         })
 
 df_availability = pd.DataFrame(availability_data)
-heatmap_data = df_availability.pivot(index='customer', columns='metric', values='availability_pct')
+heatmap_data = df_availability.pivot(index='id', columns='metric', values='availability_pct')
 
 # Plot heatmap
 sns.heatmap(heatmap_data, annot=True, fmt='.0f', cmap='YlGnBu', ax=axes[0], 
             cbar_kws={'label': 'Data Availability (%)'}, linewidths=0.5)
-axes[0].set_title('Data Availability by Customer (First 20 Customers)', fontsize=12, fontweight='bold')
+axes[0].set_title('Data Availability by id (First 20 ids)', fontsize=12, fontweight='bold')
 axes[0].set_xlabel('Metric')
-axes[0].set_ylabel('Customer ID')
+axes[0].set_ylabel('id ID')
 plt.setp(axes[0].xaxis.get_majorticklabels(), rotation=45, ha='right')
 
 # Summary statistics table
@@ -918,7 +1163,7 @@ plt.rcParams['figure.figsize'] = (16, 12)
 
 # Create subset of key metrics
 viz_cols = [
-    "customer", "local_day",
+    "id", "local_day",
     "HR_count", "SPM_count",
     "ACTIVE_n_sessions", "BIKE_n_sessions", "RUN_n_sessions", "WALK_n_sessions",
     "ACTIVE_total_duration", "BIKE_total_duration", "RUN_total_duration", "WALK_total_duration",
@@ -990,27 +1235,27 @@ ax6.axvline(df_viz['total_floors_climbed'].median(), color='darkgreen', linestyl
             label=f'Median: {df_viz["total_floors_climbed"].median():.1f}')
 ax6.legend()
 
-# 7. Time Series - Heart Rate (sample customer)
+# 7. Time Series - Heart Rate (sample id)
 ax7 = fig.add_subplot(gs[2, :])
-sample_customers = df_viz['customer'].unique()[:5]  # First 5 customers
-for i, customer in enumerate(sample_customers):
-    customer_data = df_viz[df_viz['customer'] == customer].sort_values('local_day')
-    ax7.plot(customer_data['local_day'], customer_data['HR_count'], 
-             marker='o', markersize=3, alpha=0.7, label=f'Customer {customer}')
-ax7.set_title('Heart Rate Data Count Over Time (Sample Customers)', fontsize=12, fontweight='bold')
+sample_ids = df_viz['id'].unique()[:5]  # First 5 ids
+for i, id in enumerate(sample_ids):
+    id_data = df_viz[df_viz['id'] == id].sort_values('local_day')
+    ax7.plot(id_data['local_day'], id_data['HR_count'], 
+             marker='o', markersize=3, alpha=0.7, label=f'id {id}')
+ax7.set_title('Heart Rate Data Count Over Time (Sample ids)', fontsize=12, fontweight='bold')
 ax7.set_xlabel('Date')
 ax7.set_ylabel('HR Count')
 ax7.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 ax7.grid(alpha=0.3)
 plt.setp(ax7.xaxis.get_majorticklabels(), rotation=45)
 
-# 8. Time Series - Steps (sample customer)
+# 8. Time Series - Steps (sample id)
 ax8 = fig.add_subplot(gs[3, :])
-for i, customer in enumerate(sample_customers):
-    customer_data = df_viz[df_viz['customer'] == customer].sort_values('local_day')
-    ax8.plot(customer_data['local_day'], customer_data['SPM_count'], 
-             marker='o', markersize=3, alpha=0.7, label=f'Customer {customer}')
-ax8.set_title('Steps Count Over Time (Sample Customers)', fontsize=12, fontweight='bold')
+for i, id in enumerate(sample_ids):
+    id_data = df_viz[df_viz['id'] == id].sort_values('local_day')
+    ax8.plot(id_data['local_day'], id_data['SPM_count'], 
+             marker='o', markersize=3, alpha=0.7, label=f'id {id}')
+ax8.set_title('Steps Count Over Time (Sample ids)', fontsize=12, fontweight='bold')
 ax8.set_xlabel('Date')
 ax8.set_ylabel('Steps Count')
 ax8.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -1025,30 +1270,30 @@ plt.show()
 # ## Visualize Daily Passive Data
 
 # %%
-# Compute missing data summary -> the number of missing days per customer per feature
+# Compute missing data summary -> the number of missing days per id per feature
 
-# Get date range per customer
-customer_dates = df_daily.groupby('customer')['local_day'].agg(['min', 'max']).reset_index()
+# Get date range per id
+id_dates = df_daily.groupby('id')['local_day'].agg(['min', 'max']).reset_index()
 
-# Create complete date range for each customer
+# Create complete date range for each id
 missing_summary = []
-for _, row in customer_dates.iterrows():
-    customer = row['customer']
+for _, row in id_dates.iterrows():
+    id = row['id']
     date_range = pd.date_range(start=row['min'], end=row['max'], freq='D')
     
-    # Get actual data for this customer
-    customer_data = df_daily[df_daily['customer'] == customer].set_index('local_day')
+    # Get actual data for this id
+    id_data = df_daily[df_daily['id'] == id].set_index('local_day')
     
     # Count missing days for each feature (column)
     for col in df_daily.columns:
-        if col not in ['customer', 'local_day']:
+        if col not in ['id', 'local_day']:
             # Reindex to full date range and count nulls
-            full_range_data = customer_data[col].reindex(date_range)
+            full_range_data = id_data[col].reindex(date_range)
             n_missing = full_range_data.isna().sum()
             total_days = len(date_range)
             
             missing_summary.append({
-                'customer': customer,
+                'id': id,
                 'feature': col,
                 'n_missing_days': n_missing,
                 'total_days': total_days,
@@ -1064,16 +1309,16 @@ df_missing_summary
 # ## missing data of `df_backup`
 
 # %%
-df_backup["local_start_time"].dt.date
+df_backup["local_timestamp_start"].dt.date
 
 # %%
-df_backup["local_day"] = df_backup["local_start_time"].dt.floor('d')
+df_backup["local_day"] = df_backup["local_timestamp_start"].dt.floor('d')
 
 # %%
 df_backup
 
 # %%
-df = df_backup[df_backup["customer"] == "0ePW"].copy()
+df = df_backup[df_backup["id"] == "0ePW"].copy()
 
 # %%
 df["local_day"]
@@ -1082,11 +1327,11 @@ df["local_day"]
 df["day_from_study_start"] = (df["local_day"] - df["local_day"].min()).dt.days
 
 # %%
-df[df["type"] == "HeartRate"]
+df[df["modality"] == "HeartRate"]
 df.groupby("day_from_study_start")
 
 # %%
-df[df["type"] == "HeartRate"]
+df[df["modality"] == "HeartRate"]
 
 # %%
 df_daily.columns.tolist()
