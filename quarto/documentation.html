@@ -1490,6 +1490,167 @@ Glossary
 
 </div>
 </details>
+<p><strong>Heartrate: Daily Aggregates</strong></p>
+<p>Daily Features inspired by [insert RADAR study reference]</p>
+<p>File name: <code>heartrate_daily</code></p>
+<details>
+<summary>
+<strong>Show details</strong>
+</summary>
+<div style="max-width: 800px; font-size: 14px;">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 2%">
+<col style="width: 21%">
+<col style="width: 54%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>No</th>
+<th>Column Name</th>
+<th>Description</th>
+<th>Source / Calculation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><strong><code>id</code></strong></td>
+<td>Participant identifier</td>
+<td>Grouping key</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><strong><code>local_day</code></strong></td>
+<td>The local calendar day of the records (floored to midnight)</td>
+<td>Grouping key</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><strong><code>HR_count</code></strong></td>
+<td>Total number of 1-second HR records in the day</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><strong><code>HR_mean</code></strong></td>
+<td>Average heart rate over the day</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><strong><code>HR_std</code></strong></td>
+<td>Standard deviation of heart rate</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><strong><code>HR_min</code></strong></td>
+<td>Minimum heart rate recorded in the day</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><strong><code>HR_max</code></strong></td>
+<td>Maximum heart rate recorded in the day</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td><strong><code>HR_skew</code></strong></td>
+<td>Skewness of the heart rate distribution</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td><strong><code>HR_kurtosis</code></strong></td>
+<td>Kurtosis of the heart rate distribution</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td><strong><code>HR_zone_resting</code></strong></td>
+<td>Total seconds spent with HR below resting threshold (default &lt; 60)</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td><strong><code>HR_zone_moderate</code></strong></td>
+<td>Total seconds spent with HR between resting and vigorous thresholds (default 60 ≤ HR &lt; 100)</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td><strong><code>HR_zone_vigorous</code></strong></td>
+<td>Total seconds spent with HR above vigorous threshold (default ≥ 100)</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="odd">
+<td>13</td>
+<td><strong><code>HR_raw_records</code></strong></td>
+<td>Total count of raw HR records logged per day</td>
+<td>Calculated on raw unexpanded records</td>
+</tr>
+<tr class="even">
+<td>14</td>
+<td><strong><code>HR_raw_hours_with_records</code></strong></td>
+<td>Number of unique hours in the day that contain at least one raw HR record</td>
+<td>Calculated on raw unexpanded records</td>
+</tr>
+<tr class="odd">
+<td>15</td>
+<td><strong><code>HR_raw_records_per_hour_mean</code></strong></td>
+<td>Mean of raw records per hour (averaged <strong>only over hours with data</strong>)</td>
+<td>Calculated on raw unexpanded records</td>
+</tr>
+<tr class="even">
+<td>16</td>
+<td><strong><code>HR_raw_records_per_hour_median</code></strong></td>
+<td>Median of raw records per hour (calculated <strong>only over hours with data</strong>)</td>
+<td>Calculated on raw unexpanded records</td>
+</tr>
+<tr class="odd">
+<td>17</td>
+<td><strong><code>HR_raw_records_per_hour_std</code></strong></td>
+<td>Standard deviation of raw records per hour (calculated <strong>only over hours with data</strong>)</td>
+<td>Calculated on raw unexpanded records</td>
+</tr>
+<tr class="even">
+<td>18</td>
+<td><strong><code>HR_seconds_hours_with_data</code></strong></td>
+<td>Number of unique hours in the day containing 1-second expanded HR data</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="odd">
+<td>19</td>
+<td><strong><code>HR_seconds_per_hour_mean</code></strong></td>
+<td>Mean of 1-second HR records per hour (averaged <strong>only over hours with data</strong>)</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="even">
+<td>20</td>
+<td><strong><code>HR_seconds_per_hour_median</code></strong></td>
+<td>Median of 1-second HR records per hour (calculated <strong>only over hours with data</strong>)</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="odd">
+<td>21</td>
+<td><strong><code>HR_seconds_per_hour_std</code></strong></td>
+<td>Standard deviation of 1-second HR records per hour (calculated <strong>only over hours with data</strong>)</td>
+<td>Calculated on 1-second expanded data</td>
+</tr>
+<tr class="even">
+<td>22</td>
+<td><strong><code>HR_coverage</code></strong></td>
+<td>Percentage of the day covered by HR recordings (<code>HR_raw_hours_with_records / 24</code>)</td>
+<td>Derived from raw coverage stats</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</details>
 </section>
 <section id="activity" class="level4">
 <h4 class="anchored" data-anchor-id="activity">Activity</h4>
@@ -1611,6 +1772,9 @@ Glossary
 
 </div>
 </details>
+</section>
+<section id="steps" class="level4">
+<h4 class="anchored" data-anchor-id="steps">Steps</h4>
 <p><strong>Steps: Daily Aggregates</strong></p>
 <p>Daily Features inspired by [insert RADAR study reference]</p>
 <p>File name: <code>steps_daily</code></p>
