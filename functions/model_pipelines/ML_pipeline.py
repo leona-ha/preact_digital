@@ -5,14 +5,13 @@ from sklearn.base import BaseEstimator, TransformerMixin,RegressorMixin
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder, FunctionTransformer,OrdinalEncoder, LabelEncoder
-from sklearn.impute import SimpleImputer, KNNImputer,IterativeImputer
+from sklearn.impute import SimpleImputer, KNNImputer
 from sklearn.metrics import make_scorer, r2_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import BaseCrossValidator
 import logging
 import sys
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.experimental import enable_iterative_imputer
 from sklearn.model_selection import train_test_split
 from custom_models import PerUserInterceptModel
 import scipy.stats as st
@@ -419,8 +418,6 @@ class MLpipeline:
     
         if self.cfg.IMPUTE_STRATEGY == "knn":
             imputer_numeric = KNNImputer(n_neighbors=5)
-        elif self.cfg.IMPUTE_STRATEGY == "iterative":
-            imputer_numeric =IterativeImputer(max_iter=15)
         else:
             imputer_numeric = SimpleImputer(strategy=self.cfg.IMPUTE_STRATEGY)
     
