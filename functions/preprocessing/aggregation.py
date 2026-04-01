@@ -405,6 +405,39 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
     -------
     pd.DataFrame
         Daily sleep aggregates with columns: id, local_day, and sleep metrics
+
+    Returned metrics include:
+    | Column Name | Description | Source / Calculation |
+    | :--- | :--- | :--- |
+    | **`id`** | Participant identifier | Grouping key |
+    | **`local_day`** | Local wake-up day used for daily aggregation | Grouping key |
+    | **`longest_sleep_session_duration`** | Duration (seconds) of the longest sleep session in day | Longest session by `sleep_session_duration` |
+    | **`longest_total_sleep_time`** | Total sleep time (seconds) in the longest sleep session | `SleepStateBinary` duration in longest session |
+    | **`longest_time_in_bed`** | Time in bed (seconds) in the longest sleep session | `total_sleep_time + SleepAwake_duration` in longest session |
+    | **`longest_time_out_of_bed`** | Time out of bed (seconds) during longest sleep session window | `sleep_session_duration - time_in_bed` in longest session |
+    | **`longest_SleepAwake_duration`** | Awake duration (seconds) in longest sleep session | Sum of `SleepAwakeBinary` duration in longest session |
+    | **`longest_SleepLight_duration`** | Light sleep duration (seconds) in longest sleep session | Sum of `SleepLightBinary` duration in longest session |
+    | **`longest_SleepDeep_duration`** | Deep sleep duration (seconds) in longest sleep session | Sum of `SleepDeepBinary` duration in longest session |
+    | **`longest_awakenings`** | Number of awakenings in longest sleep session | Count of gaps >= awakening threshold |
+    | **`longest_long_awakenings`** | Number of long awakenings in longest sleep session | Count of gaps >= insomnia-awake threshold |
+    | **`longest_sleep_onset_hour`** | Local sleep onset clock-time (decimal hour) for longest session | Derived from local onset timestamp |
+    | **`longest_sleep_offset_hour`** | Local sleep offset clock-time (decimal hour) for longest session | Derived from local offset timestamp |
+    | **`longest_sleep_efficiency`** | Sleep efficiency for longest session | `total_sleep_time / time_in_bed` |
+    | **`longest_hypersomnia`** | Hypersomnia flag for longest session | `total_sleep_time >= hypersomnia_threshold` |
+    | **`longest_insomnia`** | Insomnia flag for longest session | `total_sleep_time <= insomnia_sleep_threshold` and >=1 long awakening |
+    | **`longest_awake_pct`** | Awake proportion in bed for longest session | `SleepAwake_duration / time_in_bed` |
+    | **`longest_light_sleep_pct`** | Light-sleep proportion in bed for longest session | `SleepLight_duration / time_in_bed` |
+    | **`longest_deep_sleep_pct`** | Deep-sleep proportion in bed for longest session | `SleepDeep_duration / time_in_bed` |
+    | **`sum_sleep_session_duration`** | Total sleep-session duration (seconds) across all sessions in day | Sum across sessions |
+    | **`sum_total_sleep_time`** | Total sleep time (seconds) across all sessions in day | Sum across sessions |
+    | **`sum_time_in_bed`** | Total time in bed (seconds) across all sessions in day | Sum across sessions |
+    | **`sum_time_out_of_bed`** | Total time out of bed (seconds) across all sessions in day | Sum across sessions |
+    | **`sum_SleepAwake_duration`** | Total awake duration (seconds) across all sessions in day | Sum across sessions |
+    | **`sum_SleepLight_duration`** | Total light sleep duration (seconds) across all sessions in day | Sum across sessions |
+    | **`sum_SleepDeep_duration`** | Total deep sleep duration (seconds) across all sessions in day | Sum across sessions |
+    | **`sum_awakenings`** | Total awakening count across all sessions in day | Sum across sessions |
+    | **`sum_long_awakenings`** | Total long-awakening count across all sessions in day | Sum across sessions |
+    | **`num_sessions_in_day`** | Number of sleep sessions assigned to that day | Session count per id-day |
     """
     # Compute sleep sessions using existing function
     # ! the bottleneck is here, if to optimize, optimize compute_sleep_sessions
@@ -743,7 +776,7 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     Parameters
     ----------
     df_backup : pd.DataFrame
-        Raw backup data with Steps records
+        Raw backup data with steps records
     cutoff_seconds : int
         Maximum session duration to include (default 600 = 10 minutes)
     nighttime_hour : int
@@ -753,8 +786,42 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     -------
     pd.DataFrame
         Daily steps aggregates with columns: id, local_day, and step metrics
+
+    Returned metrics include:
+    | Column Name | Description | Source / Calculation |
+    | :--- | :--- | :--- |
+    | **`id`** | Participant identifier | Grouping key |
+    | **`local_day`** | The local calendar day of the records (floored to midnight) | Grouping key |
+    | **`for_id`** | External participant identifier | First available value in day |
+    | **`steps_in_day`** | Total daily steps proxy from expanded minute-level series | Sum of steps across day |
+    | **`SPM_max`** | Maximum minute-level step intensity in day | Max of daily steps per minute (SPM) |
+    | **`SPM_count`** | Number of expanded minute records in day | Count of daily `SPM` |
+    | **`SPM_mean`** | Mean minute-level step intensity in day | Mean of daily `SPM` |
+    | **`SPM_std`** | Standard deviation of minute-level step intensity in day | Std of daily `SPM` |
+    | **`SPM_skew`** | Skewness of minute-level step intensity in day | Skew of daily `SPM` |
+    | **`SPM_kurtosis`** | Kurtosis of minute-level step intensity in day | Kurtosis of daily `SPM` |
+    | **`SPM_25pct`** | 25th percentile of minute-level step intensity | Quantile of daily `SPM` |
+    | **`SPM_50pct`** | 50th percentile (median) of minute-level step intensity | Quantile of daily `SPM` |
+    | **`SPM_75pct`** | 75th percentile of minute-level step intensity | Quantile of daily `SPM` |
+    | **`steps_night_sum`** | Total nighttime steps | Sum of `SPM` where local hour `< nighttime_hour` |
+    | **`steps_night_mean`** | Mean nighttime steps intensity | Mean of `SPM` where local hour `< nighttime_hour` |
+    | **`steps_hours_with_records`** | Number of unique local hours with any steps records | Count of hourly bins after minute expansion |
+    | **`steps_per_hour`** | Mean steps per recorded hour | Mean of hourly `steps_inhour` |
+    | **`SPM_max_avgbyhour`** | Average hourly max `SPM` across the day | Mean of hourly max `SPM` |
+    | **`SPM_mean_avgbyhour`** | Average hourly mean `SPM` across the day | Mean of hourly mean `SPM` |
+    | **`SPM_std_avgbyhour`** | Average hourly std `SPM` across the day | Mean of hourly std `SPM` |
+    | **`SPM_skew_avgbyhour`** | Average hourly skew `SPM` across the day | Mean of hourly skew `SPM` |
+    | **`SPM_kurtosis_avgbyhour`** | Average hourly kurtosis `SPM` across the day | Mean of hourly kurtosis `SPM` |
+    | **`steps_coverage`** | Percentage of the day covered by steps recordings (`steps_hours_with_records / 24`) | Derived from hourly coverage |
+    | **`steps_in_most_active_hour`** | Steps volume in the most active hour | `steps_inhour` at daily max hour |
+    | **`most_active_hour`** | Clock hour (0-23) with highest steps volume | Hour of daily max `steps_inhour` |
+    | **`max_spm_in_most_active_hour`** | Max minute-level intensity in most active hour | Hour-level `SPM_max_inhour` at daily max hour |
+    | **`avg_spm_in_most_active_hour`** | Mean minute-level intensity in most active hour | Hour-level `SPM_mean_inhour` at daily max hour |
+    | **`hour_reach_25pct_steps_cumsum`** | Clock hour where cumulative steps first reach 25% of day total | From hourly cumulative sum |
+    | **`hour_reach_50pct_steps_cumsum`** | Clock hour where cumulative steps first reach 50% of day total | From hourly cumulative sum |
+    | **`hour_reach_75pct_steps_cumsum`** | Clock hour where cumulative steps first reach 75% of day total | From hourly cumulative sum |
     """
-    # Filter Steps data
+    # Filter steps data
     df = df_backup[df_backup["modality"] == "Steps"].copy()
     df = df[
         [
@@ -766,20 +833,20 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
             "local_timestamp_start",
         ]
     ].copy()
-    df = df.rename(columns={"float_value": "Steps"})
+    df = df.rename(columns={"float_value": "steps"})
 
     # Compute duration and apply cutoff
     df["start_end"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
     df = df[df["start_end"] <= cutoff_seconds].copy()
 
-    # Compute SPM (Steps Per Minute)
+    # Compute SPM (steps Per Minute)
     df["duration"] = (
         (df["timestamp_end"] - df["timestamp_start"])
         .dt.total_seconds()
         .fillna(0)
         .astype(int)
     )
-    df["SPM"] = df["Steps"] / (df["duration"] / 60)
+    df["SPM"] = df["steps"] / (df["duration"] / 60)
     df["SPM"] = df["SPM"].replace([np.inf, -np.inf], np.nan).fillna(0)
 
     # Expand to 1-minute resolution
@@ -816,40 +883,40 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
         df_avg.groupby(["id", "local_day"], observed=True)
         .agg(
             for_id=("for_id", "first"),
-            StepsInDay=("SPM", "sum"),
-            SPM_25pct=("SPM", lambda x: x.quantile(0.25)),
-            SPM_50pct=("SPM", lambda x: x.quantile(0.50)),
-            SPM_75pct=("SPM", lambda x: x.quantile(0.75)),
+            steps_in_day=("SPM", "sum"),
             SPM_max=("SPM", "max"),
             SPM_count=("SPM", "count"),
             SPM_mean=("SPM", "mean"),
             SPM_std=("SPM", "std"),
             SPM_skew=("SPM", "skew"),
             SPM_kurtosis=("SPM", lambda x: x.kurtosis()),
-            StepsAtNight_sum=(
+            SPM_25pct=("SPM", lambda x: x.quantile(0.25)),
+            SPM_50pct=("SPM", lambda x: x.quantile(0.50)),
+            SPM_75pct=("SPM", lambda x: x.quantile(0.75)),
+            steps_night_sum=(
                 "SPM",
                 lambda x: x[df_avg.loc[x.index, "isnighttime"]].sum(),
             ),
-            StepsAtNight_mean=(
+            steps_night_mean=(
                 "SPM",
                 lambda x: x[df_avg.loc[x.index, "isnighttime"]].mean(),
             ),
         )
         .reset_index()
     )
-    df_steps_daily["StepsAtNight_mean"] = df_steps_daily["StepsAtNight_mean"].fillna(0)
+    df_steps_daily["steps_night_mean"] = df_steps_daily["steps_night_mean"].fillna(0)
 
     # Hourly aggregation (intermediate step)
     df_hourly = (
         df_avg.groupby(["id", "local_hour"], observed=True)
         .agg(
             local_day=("local_day", "first"),
-            Steps_inHour=("SPM", "sum"),
-            SPM_max_inHour=("SPM", "max"),
-            SPM_mean_inHour=("SPM", "mean"),
-            SPM_std_inHour=("SPM", "std"),
-            SPM_skew_inHour=("SPM", "skew"),
-            SPM_kurtosis_inHour=("SPM", lambda x: x.kurtosis()),
+            steps_inhour=("SPM", "sum"),
+            SPM_max_inhour=("SPM", "max"),
+            SPM_mean_inhour=("SPM", "mean"),
+            SPM_std_inhour=("SPM", "std"),
+            SPM_skew_inhour=("SPM", "skew"),
+            SPM_kurtosis_inhour=("SPM", lambda x: x.kurtosis()),
         )
         .reset_index()
     )
@@ -859,12 +926,13 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     hourly_agg = (
         df_hourly.groupby(["id", "local_day"], observed=True)
         .agg(
-            StepsPerHour=("Steps_inHour", "mean"),
-            SPM_max_avgbyHour=("SPM_max_inHour", "mean"),
-            SPM_mean_avgbyHour=("SPM_mean_inHour", "mean"),
-            SPM_std_avgbyHour=("SPM_std_inHour", "mean"),
-            SPM_skew_avgbyHour=("SPM_skew_inHour", "mean"),
-            SPM_kurtosis_avgbyHour=("SPM_kurtosis_inHour", "mean"),
+            steps_hours_with_records=("local_hour", "count"),
+            steps_per_hour=("steps_inhour", "mean"),
+            SPM_max_avgbyhour=("SPM_max_inhour", "mean"),
+            SPM_mean_avgbyhour=("SPM_mean_inhour", "mean"),
+            SPM_std_avgbyhour=("SPM_std_inhour", "mean"),
+            SPM_skew_avgbyhour=("SPM_skew_inhour", "mean"),
+            SPM_kurtosis_avgbyhour=("SPM_kurtosis_inhour", "mean"),
         )
         .reset_index()
     )
@@ -873,24 +941,27 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
         hourly_agg, on=["id", "local_day"], how="left"
     )
 
+    # Coverage is the share of day-hours with at least one steps record.
+    df_steps_daily["steps_coverage"] = df_steps_daily["steps_hours_with_records"] / 24
+
     # Most active hour
     most_active = df_hourly.loc[
-        df_hourly.groupby(["id", "local_day"], observed=True)["Steps_inHour"].idxmax()
+        df_hourly.groupby(["id", "local_day"], observed=True)["steps_inhour"].idxmax()
     ][
         [
             "id",
             "local_day",
-            "Steps_inHour",
+            "steps_inhour",
             "clock_hour",
-            "SPM_max_inHour",
-            "SPM_mean_inHour",
+            "SPM_max_inhour",
+            "SPM_mean_inhour",
         ]
     ].rename(
         columns={
-            "Steps_inHour": "Steps_in_most_active_hour",
+            "steps_inhour": "steps_in_most_active_hour",
             "clock_hour": "most_active_hour",
-            "SPM_max_inHour": "max_spm_in_most_active_hour",
-            "SPM_mean_inHour": "avg_spm_in_most_active_hour",
+            "SPM_max_inhour": "max_spm_in_most_active_hour",
+            "SPM_mean_inhour": "avg_spm_in_most_active_hour",
         }
     )
     df_steps_daily = df_steps_daily.merge(
@@ -898,22 +969,22 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     )
 
     # Percentile hours (when 25%, 50%, 75% of daily steps are reached)
-    df_hourly["Steps_inHour_cumsum"] = df_hourly.groupby(
+    df_hourly["steps_inhour_cumsum"] = df_hourly.groupby(
         ["id", "local_day"], observed=True
-    )["Steps_inHour"].cumsum()
+    )["steps_inhour"].cumsum()
 
     def percentile_hours(group, percentiles=(0.25, 0.5, 0.75)):
-        total_steps = group["Steps_inHour_cumsum"].iloc[-1]
+        total_steps = group["steps_inhour_cumsum"].iloc[-1]
         result = {}
         for p in percentiles:
             if total_steps > 0:
-                idx = group["Steps_inHour_cumsum"].searchsorted(p * total_steps)
+                idx = group["steps_inhour_cumsum"].searchsorted(p * total_steps)
                 idx = min(idx, len(group) - 1)
-                result[f"hour_reach_{int(p * 100)}pct_Steps_cumsum"] = group.iloc[idx][
+                result[f"hour_reach_{int(p * 100)}pct_steps_cumsum"] = group.iloc[idx][
                     "local_hour"
                 ].hour
             else:
-                result[f"hour_reach_{int(p * 100)}pct_Steps_cumsum"] = np.nan
+                result[f"hour_reach_{int(p * 100)}pct_steps_cumsum"] = np.nan
         return pd.Series(result)
 
     pct_hours = (
@@ -941,6 +1012,33 @@ def aggregate_activity_daily(df_backup, exclude=None):
     -------
     pd.DataFrame
         Daily activity aggregates in wide format with prefixed columns per activity type
+
+    Returned metrics include:
+    | Column Name | Description | Source / Calculation |
+    | :--- | :--- | :--- |
+    | **`id`** | Participant identifier | Grouping key |
+    | **`local_day`** | The local calendar day of the records (floored to midnight) | Grouping key |
+    | **`ACTIVE_avg_session_duration`** | Mean ACTIVE session duration (minutes) | Mean of ACTIVE session durations |
+    | **`BIKE_avg_session_duration`** | Mean BIKE session duration (minutes) | Mean of BIKE session durations |
+    | **`RUN_avg_session_duration`** | Mean RUN session duration (minutes) | Mean of RUN session durations |
+    | **`WALK_avg_session_duration`** | Mean WALK session duration (minutes) | Mean of WALK session durations |
+    | **`ACTIVE_max_session_duration`** | Longest ACTIVE session duration (minutes) | Max of ACTIVE session durations |
+    | **`BIKE_max_session_duration`** | Longest BIKE session duration (minutes) | Max of BIKE session durations |
+    | **`RUN_max_session_duration`** | Longest RUN session duration (minutes) | Max of RUN session durations |
+    | **`WALK_max_session_duration`** | Longest WALK session duration (minutes) | Max of WALK session durations |
+    | **`ACTIVE_n_sessions`** | Number of ACTIVE sessions in day | Count of ACTIVE sessions |
+    | **`BIKE_n_sessions`** | Number of BIKE sessions in day | Count of BIKE sessions |
+    | **`RUN_n_sessions`** | Number of RUN sessions in day | Count of RUN sessions |
+    | **`WALK_n_sessions`** | Number of WALK sessions in day | Count of WALK sessions |
+    | **`ACTIVE_total_duration`** | Total ACTIVE minutes in day | Sum of ACTIVE session durations |
+    | **`BIKE_total_duration`** | Total BIKE minutes in day | Sum of BIKE session durations |
+    | **`RUN_total_duration`** | Total RUN minutes in day | Sum of RUN session durations |
+    | **`WALK_total_duration`** | Total WALK minutes in day | Sum of WALK session durations |
+
+    Notes:
+    - The table above reflects the column set observed in your notebook output.
+    - Actual output columns still depend on which activity classes are present after filtering.
+    - Output is pivoted to wide format with zero fill for missing activity/day combinations among included classes.
     """
     if exclude is None:
         exclude = ["SLEEP", "REST"]
@@ -1004,6 +1102,16 @@ def aggregate_elevation_daily(df_backup, cutoff_hours=4):
     -------
     pd.DataFrame
         Daily elevation aggregates with columns: id, local_day, total_elevation_gain
+
+    Returned metrics include:
+    | Column Name | Description | Source / Calculation |
+    | :--- | :--- | :--- |
+    | **`id`** | Participant identifier | Grouping key |
+    | **`local_day`** | The local calendar day of the records (floored to midnight) | Grouping key |
+    | **`total_elevation_gain`** | Total daily elevation gain | Sum of `float_value` for `ElevationGain` records after cutoff filter |
+
+    Notes:
+    - Records with session duration above `cutoff_hours` are excluded before aggregation.
     """
     df = df_backup[df_backup["modality"] == "ElevationGain"].copy()
     df["local_day"] = df["local_timestamp_start"].dt.floor("D")
@@ -1034,6 +1142,13 @@ def aggregate_floors_daily(df_backup):
     -------
     pd.DataFrame
         Daily floors aggregates with columns: id, local_day, total_floors_climbed
+
+    Returned metrics include:
+    | Column Name | Description | Source / Calculation |
+    | :--- | :--- | :--- |
+    | **`id`** | Participant identifier | Grouping key |
+    | **`local_day`** | The local calendar day of the records (floored to midnight) | Grouping key |
+    | **`total_floors_climbed`** | Total floors climbed in day | Sum of `float_value` for `FloorsClimbed` records |
     """
     df = df_backup[df_backup["modality"] == "FloorsClimbed"].copy()
     df["local_day"] = df["local_timestamp_start"].dt.floor("D")
