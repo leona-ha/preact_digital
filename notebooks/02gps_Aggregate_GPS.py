@@ -210,12 +210,12 @@ plt.yscale("log")
 plt.xlabel("Time to next GPS sample (seconds)")
 
 # %%
-bins = np.logspace(np.log2(1), np.log2(24 * 3600), num= 100, base=2)
+bins = np.logspace(np.log2(1), np.log2(24 * 3600), num=100, base=2)
 bins
 
 # %%
 bins = np.arange(0, 24 * 3600, 1)
-bins = np.logspace(np.log10(1), np.log10(24 * 3600), num= 100, base=10)
+bins = np.logspace(np.log10(1), np.log10(24 * 3600), num=100, base=10)
 (df_loc["time_to_next_sample"]).plot.hist(bins=bins, alpha=0.5, label="original")
 plt.xlabel("Time to next GPS sample (seconds)")
 plt.xscale("log")
@@ -276,6 +276,9 @@ df_gps_coverage = gps_raw_points.merge(
 df_gps_coverage["GPS_coverage_pct"] = (
     df_gps_coverage["GPS_hours_with_data"] / 24.0 * 100.0
 )
+
+# %%
+df_gps_coverage
 
 # %%
 logging.info("GPS coverage metrics calculated and merged into df_gps_coverage")
@@ -410,7 +413,9 @@ fig = px.scatter(
     plot_df,
     x="Longitude",
     y="Latitude",
-    size=np.clip(plot_df["time_to_next_sample"].fillna(0) / 60, 2, 60),  # Size by time to next sample (in minutes)
+    size=np.clip(
+        plot_df["time_to_next_sample"].fillna(0) / 60, 2, 60
+    ),  # Size by time to next sample (in minutes)
     color=plot_df["cluster_label"].astype(str),  # Ensure it's treated as categorical
     color_discrete_map=color_map,
     category_orders={"cluster_label": ["-1"] + [str(c) for c in unique_clusters]},
@@ -435,7 +440,9 @@ import plotly.express as px
 import numpy as np
 
 # 1. Prepare the data
-plot_df = df[["Berlin_Lat", "Berlin_Lon", "timestamp_start", "time_to_next_sample"]].copy()
+plot_df = df[
+    ["Berlin_Lat", "Berlin_Lon", "timestamp_start", "time_to_next_sample"]
+].copy()
 plot_df["cluster_label"] = cluster_labels
 
 # --- THE NO-DEPENDENCY PROJECTION TO KILOMETERS ---
@@ -455,7 +462,7 @@ plot_df["Y_km"] = (plot_df["Berlin_Lat"] - center_lat) * km_per_deg_lat
 unique_clusters = sorted([c for c in plot_df["cluster_label"].unique() if c != -1])
 turbo_colors = px.colors.sample_colorscale("Turbo", len(unique_clusters))
 
-color_map = {"-1": "rgba(200, 200, 200, 0.5)"} 
+color_map = {"-1": "rgba(200, 200, 200, 0.5)"}
 for label, color in zip(unique_clusters, turbo_colors):
     color_map[str(label)] = color
 
@@ -464,22 +471,24 @@ fig = px.scatter(
     plot_df,
     x="X_km",  # Now plotting pure kilometers
     y="Y_km",  # Now plotting pure kilometers
-    size=np.clip(plot_df["time_to_next_sample"].fillna(0) / 60, 1, 60),  # Size by time to next sample (in minutes)
-    color=plot_df["cluster_label"].astype(str), 
+    size=np.clip(
+        plot_df["time_to_next_sample"].fillna(0) / 60, 1, 60
+    ),  # Size by time to next sample (in minutes)
+    color=plot_df["cluster_label"].astype(str),
     color_discrete_map=color_map,
     category_orders={"cluster_label": ["-1"] + [str(c) for c in unique_clusters]},
     title="Interactive Cluster Map (Local Flat Plane in km)",
     labels={
         "cluster_label": "Cluster ID",
         "X_km": "Distance East/West (km)",
-        "Y_km": "Distance North/South (km)"
+        "Y_km": "Distance North/South (km)",
     },
     hover_data={
         "cluster_label": True,
-        "Berlin_Lat": ':.4f',
-        "Berlin_Lon": ':.4f',
-        "X_km": ':.2f',
-        "Y_km": ':.2f',
+        "Berlin_Lat": ":.4f",
+        "Berlin_Lon": ":.4f",
+        "X_km": ":.2f",
+        "Y_km": ":.2f",
         "timestamp_start": True,
         "time_to_next_sample": True,
     },
