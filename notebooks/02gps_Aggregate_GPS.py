@@ -79,7 +79,7 @@ df_backup.head()
 df_backup.id.unique()
 
 # %%
-debug = False
+debug = True
 # debug = False
 if debug:  # take subset of participants
     # filter to random subset of participants
@@ -510,15 +510,19 @@ home_extractor = gps_features.HomeClusterExtractor(
     df_loc,
     speed_limit=1.4,
     max_distance=150,
-    epsilon=100 / 6371000,  # 100 / kms_per_radian # TODO Müller uses 30
+    # epsilon=100 / 6371000,  # 100 / kms_per_radian # TODO Müller uses 30
+    epsilon=100,  # 100 / kms_per_radian # TODO Müller uses 30
     min_samples=10,  # Müller uses 3 but we have more data
     min_nights_obs=4,
     min_f_home=0.5,
-    clustering_method="hdbscan",
+    clustering_method="dbscan",
     normalize_min_samples=False,
     min_data_points=50,
     # n_jobs=64,
     n_jobs=16,
+    # new_cluster_labeling=True,  # ensures cluster labels are consistent across days for the same participant
+    use_weights=True,
+    home_v2=True,
 )
 
 geodata_clusters = home_extractor.run()
@@ -547,6 +551,11 @@ print(
 )
 df_gps_daily.head()
 # TODO double check the home cluster extraction
+
+# %%
+geodata_clusters
+
+# %%
 
 # %%
 geodata_clusters

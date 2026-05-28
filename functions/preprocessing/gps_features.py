@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 
-from sklearn.cluster import DBSCAN, KMeans, HDBSCAN
+from sklearn.cluster import DBSCAN, KMeans
 from sklearn.metrics import pairwise_distances_argmin_min
 from sklearn.impute import SimpleImputer
 
@@ -11,7 +11,7 @@ import statistics
 import math
 from scipy import stats
 from heapq import nlargest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from math import radians, cos, sin, asin, sqrt, log
 import string
 import pickle 
@@ -38,6 +38,79 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
     meters = R * c  # Output distance in meters
     return meters
+
+def calculate_sample_weights(
+    df,
+    groupby="id",
+    max_gap=12 * 3600, # maximum 12 hours at one place
+    far_threshold=1000, # 1km is considered far 
+    far_weight=60, # assume one minute for large distances
+):
+    """
+    Calculate sample weights based on time and distance to the next sample.
+    """
+    df = df.sort_values(by=[groupby, "timestamp_start"])
+    gby = df.groupby(groupby, observed=True)
+    
+    # Time to next sample
+    time_to_next = (-gby["timestamp_start"].diff(-1)).dt.total_seconds()
+    time_to_next_clipped = time_to_next.clip(upper=max_gap).fillna(0)
+    
+    # Distance to next sample (Haversine)
+    lat_next = gby["Latitude"].shift(-1)
+    lon_next = gby["Longitude"].shift(-1)
+    
+    dist_to_next = haversine(df["Longitude"], df["Latitude"], lon_next, lat_next)
+    
+    is_far = dist_to_next > far_threshold
+    
+    weights = np.where(
+        is_far,
+        time_to_next_clipped.clip(upper=far_weight),
+        time_to_next_clipped
+    )
+    
+    return pd.Series(weights, index=df.index)
+
+def compute_row_night_time(row, start_night_hour=23, end_night_hour=6):
+    """
+    Calculate the duration of an interval that falls within a night window.
+    """
+    # Ensure inputs are parsed as pandas Timestamps
+    start = pd.to_datetime(row['local_timestamp_start'])
+    # assumed_local_endtime should be pre-calculated
+    if 'assumed_local_endtime' in row:
+        end = pd.to_datetime(row['assumed_local_endtime'])
+    else:
+        # Fallback if assumed_local_endtime is not there
+        return pd.Timedelta(0)
+    
+    # Safety check for missing or invalid intervals
+    if pd.isna(start) or pd.isna(end) or start >= end:
+        return pd.Timedelta(0)
+    
+    total_night_duration = pd.Timedelta(0)
+    
+    # Look back 1 day prior to start date to capture stays 
+    # that occur during the early morning window (00:00 - 06:00)
+    current_date = start.date() - pd.Timedelta(days=1)
+    end_date = end.date()
+    
+    while current_date <= end_date:
+        # Define the night window for the current iteration
+        night_start = pd.Timestamp.combine(current_date, time(start_night_hour, 0))
+        night_end = pd.Timestamp.combine(current_date + pd.Timedelta(days=1), time(end_night_hour, 0))
+        
+        # Calculate the intersection of the stay interval and the night window
+        overlap_start = max(start, night_start)
+        overlap_end = min(end, night_end)
+        
+        if overlap_start < overlap_end:
+            total_night_duration += (overlap_end - overlap_start)
+            
+        current_date += pd.Timedelta(days=1)
+        
+    return total_night_duration
 
 def apply_clustering(df, epsilon, min_samples):
     def db2(x):
@@ -375,7 +448,9 @@ class HomeClusterExtractor:
     def __init__(
         self, df, speed_limit, max_distance, epsilon, min_samples, min_nights_obs, min_f_home,
         clustering_method='dbscan', normalize_min_samples=False, min_data_points=10, n_jobs=1,
+        use_weights=False, home_v2=False, start_night_hour=23, end_night_hour=6
     ):
+        # TODO move to one correct version and remove the use_weights and home_v2 parameters
         self.df = df.copy()
         # Parameter validation
         if speed_limit <= 0:
@@ -390,8 +465,8 @@ class HomeClusterExtractor:
             raise ValueError("min_nights_obs must be at least 1.")
         if not 0 <= min_f_home <= 1:
             raise ValueError("min_f_home must be between 0 and 1.")
-        if clustering_method not in ['dbscan', 'hdbscan']:
-            raise ValueError("clustering_method must be 'dbscan' or 'hdbscan'.")
+        if clustering_method != 'dbscan':
+            raise ValueError("clustering_method must be 'dbscan'.")
         if min_data_points < 1:
             raise ValueError("min_data_points must be at least 1.")
 
@@ -405,6 +480,10 @@ class HomeClusterExtractor:
         self.normalize_min_samples = normalize_min_samples
         self.min_data_points = min_data_points  # Minimum data points threshold
         self.n_jobs = n_jobs  # For potential parallel processing in clustering
+        self.use_weights = use_weights
+        self.home_v2 = home_v2
+        self.start_night_hour = start_night_hour
+        self.end_night_hour = end_night_hour
 
         # Ensure 'timestamp_start' is datetime
         self.df['timestamp_start'] = pd.to_datetime(self.df['timestamp_start'], errors='coerce')
@@ -440,6 +519,21 @@ class HomeClusterExtractor:
             self.df.loc[id_data.index, 'time_diff'] = time_diffs
             self.df.loc[id_data.index, 'speed'] = speeds
 
+    def calculate_distances_and_speeds_v2(self):
+        """Calculate distances and speeds to the NEXT sample."""
+        self.df = self.df.sort_values(by=['id', 'timestamp_start'])
+        gby = self.df.groupby('id', observed=True)
+        
+        self.df['time_diff'] = (-gby['timestamp_start'].diff(-1)).dt.total_seconds()
+        
+        lat_next = gby['Latitude'].shift(-1)
+        lon_next = gby['Longitude'].shift(-1)
+        
+        self.df['distance'] = haversine(self.df['Longitude'], self.df['Latitude'], lon_next, lat_next)
+        self.df['speed'] = self.df['distance'] / self.df['time_diff'].replace(0, np.nan)
+        self.df['distance'] = self.df['distance'].fillna(0)
+        self.df['time_diff'] = self.df['time_diff'].fillna(0)
+
     def calculate_stationary_and_transition(self):
         """Determine stationary points and transition status based on speed and distance."""
         # Filter out points with speed > 220 km/h (converted to m/s)
@@ -466,6 +560,15 @@ class HomeClusterExtractor:
         a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
         c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
         return R * c
+
+    def _to_xyz(self, df):
+        R = 6371000
+        lat_rad = np.radians(df['Latitude'])
+        lon_rad = np.radians(df['Longitude'])
+        x = R * np.cos(lat_rad) * np.cos(lon_rad)
+        y = R * np.cos(lat_rad) * np.sin(lon_rad)
+        z = R * np.sin(lat_rad)
+        return x, y, z
 
     def apply_clustering(self, df):
         """Apply clustering based on the selected method."""
@@ -500,18 +603,18 @@ class HomeClusterExtractor:
         else:
             min_samples = self.min_samples
 
+        # Always use XYZ and Euclidean
+        x, y, z = self._to_xyz(df)
+        X = np.column_stack((x, y, z))
+        metric = "euclidean"
+        eps = self.epsilon
+
+        sample_weight = df['sample_weight'] if 'sample_weight' in df.columns else None
+
         if self.clustering_method == 'dbscan':
-            clustering_model = DBSCAN(eps=self.epsilon, min_samples=min_samples, metric="haversine", n_jobs=self.n_jobs)
-            cluster_labels = clustering_model.fit_predict(df[['Longitude', 'Latitude']].apply(np.radians))
-            cluster_labels = cluster_labels.astype(int)
-            df['cluster'] = cluster_labels
-            return df
-        elif self.clustering_method == 'hdbscan':
-            min_cluster_size = max(2, min(min_samples, id_point_count))
-            clustering_model = HDBSCAN(min_cluster_size=min_cluster_size, metric='haversine', n_jobs=self.n_jobs)
-            cluster_labels = clustering_model.fit_predict(df[['Longitude', 'Latitude']].apply(np.radians))
-            cluster_labels = cluster_labels.astype(int)
-            df['cluster'] = cluster_labels
+            clustering_model = DBSCAN(eps=eps, min_samples=min_samples, metric=metric, n_jobs=self.n_jobs)
+            cluster_labels = clustering_model.fit_predict(X, sample_weight=sample_weight)
+            df['cluster'] = cluster_labels.astype(int)
             return df
         else:
             raise ValueError(f"Invalid clustering method: {self.clustering_method}")
@@ -611,6 +714,48 @@ class HomeClusterExtractor:
 
         return geodata_clusters
 
+    def find_home_cluster_v2(self, geodata_clusters):
+        """Identify home cluster based on weighted night-time duration."""
+        # TODO use the conditions # Apply both conditions: Minimum nights observed and minimum fraction of time spent at home
+        if 'sample_weight' not in geodata_clusters.columns:
+            logging.warning("sample_weight not found, using default home estimation.")
+            return self.find_home_cluster(geodata_clusters)
+            
+        df = geodata_clusters.copy()
+        df["assumed_duration"] = df["sample_weight"]
+        # local_timestamp_start is assumed to be in the df
+        df["assumed_local_endtime"] = df["local_timestamp_start"] + pd.to_timedelta(df["assumed_duration"], unit="s")
+        
+        # Apply compute_row_night_time
+        df["night_duration"] = df.apply(
+            lambda row: compute_row_night_time(row, self.start_night_hour, self.end_night_hour), 
+            axis=1
+        )
+        
+        # Sum night duration per id and cluster
+        cluster_summary = df.groupby(["id", "cluster"])["night_duration"].sum().reset_index()
+        
+        # Exclude noise (-1)
+        cluster_summary = cluster_summary[cluster_summary["cluster"] != -1]
+        
+        if cluster_summary.empty:
+            logging.warning("No valid clusters found for home estimation v2. Falling back.")
+            return self.find_home_cluster(geodata_clusters)
+
+        # Pick cluster with max night duration per id
+        home_clusters = cluster_summary.loc[cluster_summary.groupby("id")["night_duration"].idxmax()]
+        home_mapping = home_clusters.set_index('id')['cluster'].to_dict()
+        
+        geodata_clusters['home'] = geodata_clusters['id'].map(home_mapping)
+        geodata_clusters['home'] = geodata_clusters['home'].fillna(np.nan)
+        
+        # Create homeID
+        geodata_clusters['homeID'] = geodata_clusters.apply(
+            lambda x: f"{x['id']}00{int(x['home'])}" if pd.notna(x['home']) else None, axis=1
+        )
+        
+        return geodata_clusters
+
     def determine_if_at_home(self, df):
         """Determine if a person is at home, handling unclustered points (-1) properly."""
         # Convert cluster to integer before creating the clusterID and homeID
@@ -633,7 +778,13 @@ class HomeClusterExtractor:
         logging.info("Starting home cluster extraction process.")
         self.data_quality_check()
         logging.info("Data quality check completed.")
-        self.calculate_distances_and_speeds()
+        
+        if self.use_weights:
+            self.calculate_distances_and_speeds_v2()
+            self.df['sample_weight'] = calculate_sample_weights(self.df)
+        else:
+            self.calculate_distances_and_speeds()
+            
         logging.info("Distance and speed calculations completed.")
         self.df = self.calculate_stationary_and_transition()
         logging.info("Stationary and transition points calculated.")
@@ -647,8 +798,11 @@ class HomeClusterExtractor:
         # Fill NaNs in 'cluster' with -1
         geodata_clusters['cluster'] = geodata_clusters['cluster'].fillna(-1)
 
-        # Find home cluster with fallback
-        geodata_clusters = self.find_home_cluster(geodata_clusters)
+        # Find home cluster
+        if self.home_v2:
+            geodata_clusters = self.find_home_cluster_v2(geodata_clusters)
+        else:
+            geodata_clusters = self.find_home_cluster(geodata_clusters)
         logging.info("Home cluster finding completed.")
 
         # Determine if the person is at home
@@ -656,10 +810,3 @@ class HomeClusterExtractor:
         logging.info("At-home determination completed.")
 
         return geodata_clusters
-
-
-
-
-
-
-
