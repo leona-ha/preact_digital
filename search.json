@@ -34,7 +34,7 @@
     "href": "quarto/documentation.html",
     "title": "PREACT-digital: Feature Database Documentation",
     "section": "",
-    "text": "In the following sections, you find an overview of our datasets on the study server as well as a detailed description of variables and constructs.\n\n\n\n\n\n\n\nGlossary\n\n\n\n\n\n\nbeep = Timepoint where participants receive prompt to answer questions about their current mood, situation, etc.\nmeasurement burst = Period (i.e. 2 weeks) where participants receive regular EMA questionnaires\nepoch = Highest granularity of passive data. Epoch length depends on data source (i.e. 30 seconds for ECG data)",
+    "text": "In the following sections, you find an overview of our datasets on the study server as well as a detailed description of variables and constructs.\n\n\n\n\n\n\n\nTipGlossary\n\n\n\n\n\n\nbeep = Timepoint where participants receive prompt to answer questions about their current mood, situation, etc.\nmeasurement burst = Period (i.e. 2 weeks) where participants receive regular EMA questionnaires\nepoch = Highest granularity of passive data. Epoch length depends on data source (i.e. 30 seconds for ECG data)",
     "crumbs": [
       "Feature Documentation"
     ]
@@ -44,7 +44,7 @@
     "href": "quarto/documentation.html#introduction",
     "title": "PREACT-digital: Feature Database Documentation",
     "section": "",
-    "text": "In the following sections, you find an overview of our datasets on the study server as well as a detailed description of variables and constructs.\n\n\n\n\n\n\n\nGlossary\n\n\n\n\n\n\nbeep = Timepoint where participants receive prompt to answer questions about their current mood, situation, etc.\nmeasurement burst = Period (i.e. 2 weeks) where participants receive regular EMA questionnaires\nepoch = Highest granularity of passive data. Epoch length depends on data source (i.e. 30 seconds for ECG data)",
+    "text": "In the following sections, you find an overview of our datasets on the study server as well as a detailed description of variables and constructs.\n\n\n\n\n\n\n\nTipGlossary\n\n\n\n\n\n\nbeep = Timepoint where participants receive prompt to answer questions about their current mood, situation, etc.\nmeasurement burst = Period (i.e. 2 weeks) where participants receive regular EMA questionnaires\nepoch = Highest granularity of passive data. Epoch length depends on data source (i.e. 30 seconds for ECG data)",
     "crumbs": [
       "Feature Documentation"
     ]
