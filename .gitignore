@@ -313,3 +313,4 @@ config.py
 # Folders to ignore
 # ====================
 code/
+assets/
