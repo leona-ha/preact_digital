@@ -1,7 +1,6 @@
 # Ignore Quarto cache and output directories
 /.quarto/
 /_site/
-code/
 
 # ingore Mac OS files
 .DS_Store
@@ -310,3 +309,7 @@ ipython_config.py
 *.pkl
 config.py
 
+# ====================
+# Folders to ignore
+# ====================
+code/
