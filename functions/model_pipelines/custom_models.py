@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import pandas as pd
 import numpy as np
 from sklearn.utils.validation import check_is_fitted
-from sklearn.impute import KNNImputer, SimpleImputer, IterativeImputer
+from sklearn.impute import KNNImputer, SimpleImputer
 
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.metrics import r2_score

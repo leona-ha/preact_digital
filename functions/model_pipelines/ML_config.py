@@ -19,8 +19,6 @@ from merf.merf import MERF
 from custom_models import MERFWrapperEmbed, GlobalInterceptModel, PerUserInterceptModel, PerUserLabelScaler
 from custom_models import PerUserTransformedTargetRegressor, SplitFeaturesTransformer, PerUserFeatureScaler
 # Enable experimental features in scikit-learn
-from sklearn.experimental import enable_iterative_imputer  # ✅ Must be imported first
-from sklearn.impute import IterativeImputer  # ✅ Now you can import it
 
 from custom_models import KerasFFNNRegressor,UnknownLabelEncoder  # your new custom class
 from tensorflow.keras.callbacks import EarlyStopping
@@ -73,7 +71,8 @@ class Config:
     numeric_features = SKEWED_FEATURES + ['apparent_temperature_mean']
     binary_features = ['somatic_problems', 'psychotropic', 'ema_smartphone', 'weekend']
     categorical_features = [
-        'weekday', 'prior_treatment_description_simple', 'quest_create_hour', 'season', 'time_of_day', 'employability_description_simple'
+        'weekday', 'prior_treatment_description_simple', 'quest_create_hour', 'season', 'time_of_day', 'employability_description_simple',
+        
     ]
     categorical_features_categories = {
     'weekday': ['Friday', 'Monday', 'Saturday', 'Sunday', 'Thursday', 'Tuesday', 'Wednesday'],
@@ -142,7 +141,7 @@ class Config:
 
 embedding_model = KerasFFNNRegressor(
             sensor_feature_dim=None,  # Let the model infer: input will be (n_features, ) + user col.
-            num_users=228,
+            num_users=242,
             embedding_dim=32,
             hidden_units=(64, 32),
             epochs=20,
@@ -152,7 +151,7 @@ embedding_model = KerasFFNNRegressor(
 )
 plain_ffnn_model = KerasFFNNRegressor(
             sensor_feature_dim=None,  # Will be inferred from X (all columns are sensor features)
-            num_users=228,            # Irrelevant when use_embedding=False
+            num_users=242,            # Irrelevant when use_embedding=False
             embedding_dim=32,         # Ignored when use_embedding is False
             hidden_units=(64, 32),
             epochs=15,

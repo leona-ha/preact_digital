@@ -1,24 +1,23 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV,TimeSeriesSplit
-from sklearn.base import BaseEstimator, TransformerMixin,RegressorMixin
+from sklearn.model_selection import GridSearchCV,TimeSeriesSplit
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder, FunctionTransformer,OrdinalEncoder, LabelEncoder
-from sklearn.impute import SimpleImputer, KNNImputer,IterativeImputer
+from sklearn.impute import SimpleImputer, KNNImputer
 from sklearn.metrics import make_scorer, r2_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import BaseCrossValidator
 import logging
 import sys
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.experimental import enable_iterative_imputer
 from sklearn.model_selection import train_test_split
 from custom_models import PerUserInterceptModel
-import scipy.stats as st
-from sklearn.ensemble import RandomForestRegressor
 import tensorflow as tf
 import random
+import statsmodels.formula.api as smf
+
 random.seed(42)
 np.random.seed(42)
 tf.random.set_seed(42)
@@ -42,29 +41,32 @@ logger = logging.getLogger("MLpipelineConfig")
 ##############################################################################
 
 
-def mae_scorer(y_true, y_pred):
-    """Return negative MAE (since scikit-learn expects higher = better)."""
-    return -mean_absolute_error(y_true, y_pred)
+#def mae_scorer(y_true, y_pred):
+#    """Return negative MAE (since scikit-learn expects higher = better)."""
+#    return -mean_absolute_error(y_true, y_pred)
 
-def rmse_scorer(y_true, y_pred):
-    """Return negative RMSE."""
-    return -np.sqrt(mean_squared_error(y_true, y_pred))
+#def rmse_scorer(y_true, y_pred):
+#    """Return negative RMSE."""
+#    return -np.sqrt(mean_squared_error(y_true, y_pred))
 
-def r2_custom_scorer(y_true, y_pred):
-    """Return R^2 as is (higher is better)."""
-    return r2_score(y_true, y_pred)
+#def r2_custom_scorer(y_true, y_pred):
+#    """Return R^2 as is (higher is better)."""
+#    return r2_score(y_true, y_pred)
 
+#def safe_log1p(X):
+#   # Ensure all values are > -1
+#    return np.log1p(np.clip(X, -0.999, None))
+
+def rmse_func(y_true, y_pred):
+    return np.sqrt(mean_squared_error(y_true, y_pred))
 def safe_log1p(X):
-    # Ensure all values are > -1
     return np.log1p(np.clip(X, -0.999, None))
-
-
-# We collect these into a dictionary recognized by scikit-learn:
 custom_scorers = {
-    "mae": make_scorer(mae_scorer, greater_is_better=False),
-    "rmse": make_scorer(rmse_scorer, greater_is_better=False),
-    "r2": make_scorer(r2_custom_scorer, greater_is_better=True),
+    "mae": make_scorer(mean_absolute_error, greater_is_better=False),
+    "rmse": make_scorer(rmse_func, greater_is_better=False),
+    "r2": make_scorer(r2_score, greater_is_better=True),
 }
+
 
 def rename_holdout_columns(X_df, sensor_cols, user_col):
     """
@@ -419,8 +421,6 @@ class MLpipeline:
     
         if self.cfg.IMPUTE_STRATEGY == "knn":
             imputer_numeric = KNNImputer(n_neighbors=5)
-        elif self.cfg.IMPUTE_STRATEGY == "iterative":
-            imputer_numeric =IterativeImputer(max_iter=15)
         else:
             imputer_numeric = SimpleImputer(strategy=self.cfg.IMPUTE_STRATEGY)
     
@@ -899,6 +899,53 @@ class MLpipeline:
                 refit=refit,
                 do_final_refit=do_final_refit
             )
+            # --------------------------------------------------
+            # Participant-wise INNER TEST analyses
+            # --------------------------------------------------
+            inner_pw = self.evaluate_inner_test_participantwise(results_timebased)
+
+            inner_cmp = self.compare_against_per_user_baseline(
+                inner_pw,
+                baseline_name="PerUser_Mean_Baseline",
+                split_name="inner_test",
+                drop_baseline_rows=True
+            )
+
+            inner_macro = self.summarize_macro_scores(inner_cmp)
+
+            inner_reg_table, inner_reg_models = self.regress_delta_on_ntrain(
+                inner_cmp,
+                split_name="inner_test"
+            )
+
+            # --------------------------------------------------
+            # Participant-wise HOLDOUT adaptation analyses
+            # only available for pipelines that already return adaptation_results
+            # --------------------------------------------------
+            holdout_pw = self.adaptation_results_to_df(
+                adaptation_results,
+                split_name="holdout_adapt"
+            )
+
+            if not holdout_pw.empty and "PerUser_Intercept" in holdout_pw["pipeline_name"].unique():
+                holdout_cmp = self.compare_against_per_user_baseline(
+                    holdout_pw,
+                    baseline_name="PerUser_Intercept",
+                    split_name="holdout_adapt",
+                    drop_baseline_rows=True
+                )
+
+                holdout_macro = self.summarize_macro_scores(holdout_cmp)
+
+                holdout_reg_table, holdout_reg_models = self.regress_delta_on_ntrain(
+                    holdout_cmp,
+                    split_name="holdout_adapt"
+                )
+            else:
+                holdout_cmp = pd.DataFrame()
+                holdout_macro = pd.DataFrame()
+                holdout_reg_table = pd.DataFrame()
+                holdout_reg_models = {}
 
             # tag outcome into the dicts (handy if you inspect them later)
             for r in results_timebased:
@@ -914,7 +961,15 @@ class MLpipeline:
                 "outcome": outcome,
                 "results_timebased": results_timebased,
                 "holdout_results": holdout_results,
-                "adaptation_results": adaptation_results
+                "adaptation_results": adaptation_results,
+                "inner_participantwise": inner_pw,
+                "inner_comparison_vs_baseline": inner_cmp,
+                "inner_macro_summary": inner_macro,
+                "inner_ntrain_regression": inner_reg_table,
+                "holdout_participantwise": holdout_pw,
+                "holdout_comparison_vs_baseline": holdout_cmp,
+                "holdout_macro_summary": holdout_macro,
+                "holdout_ntrain_regression": holdout_reg_table,
             })
 
         summary = pd.concat(summary_frames, axis=0).reset_index(drop=True) if summary_frames else pd.DataFrame()
@@ -1020,9 +1075,13 @@ class MLpipeline:
                 continue
     
             # Store
+            best_cv_score = gs.best_score_
+            if refit in {"mae", "rmse"}:
+                best_cv_score = -best_cv_score
+
             results_timebased.append({
                 "pipeline_name": pipeline_name,
-                "best_cv_score": gs.best_score_,
+                "best_cv_score": best_cv_score,
                 "inner_test_scores": test_scores,
                 "best_estimator": gs.best_estimator_,
             })
@@ -1037,3 +1096,341 @@ class MLpipeline:
         # - holdout_results: baseline holdout metrics
         # - adaptation_results: per-user adaptation metrics for embedding pipelines
         return results_timebased, holdout_results, adaptation_results
+    
+
+    ##########################################################################
+    # Participant-wise evaluation helpers
+    ##########################################################################
+
+    def _per_user_metrics_from_arrays(
+        self,
+        user_ids,
+        y_true,
+        y_pred,
+        pipeline_name,
+        split_name,
+        n_train_map=None,
+    ):
+        """
+        Build a participant-wise results table from row-level predictions.
+        Returns one row per participant.
+        """
+        tmp = pd.DataFrame({
+            self.cfg.USER_COL: np.asarray(user_ids),
+            "y_true": np.asarray(y_true).ravel(),
+            "y_pred": np.asarray(y_pred).ravel(),
+        })
+
+        rows = []
+        for user_id, g in tmp.groupby(self.cfg.USER_COL, sort=False):
+            yt = g["y_true"].to_numpy()
+            yp = g["y_pred"].to_numpy()
+
+            row = {
+                self.cfg.USER_COL: user_id,
+                "pipeline_name": pipeline_name,
+                "split": split_name,
+                "outcome": self.cfg.LABEL_COL,
+                "n_test": len(g),
+                "mae": mean_absolute_error(yt, yp),
+                "rmse": np.sqrt(mean_squared_error(yt, yp)),
+                "r2": np.nan if np.unique(yt).size < 2 else r2_score(yt, yp),
+            }
+
+            if n_train_map is not None:
+                row["n_train"] = n_train_map.get(user_id, np.nan)
+                row["n_total"] = row["n_train"] + row["n_test"] if pd.notna(row["n_train"]) else np.nan
+
+            rows.append(row)
+
+        return pd.DataFrame(rows)
+
+    def evaluate_inner_test_participantwise(self, results_timebased, include_per_user_baseline=True):
+        """
+        Create a participant-wise table for the INNER TEST set for all fitted pipelines.
+
+        This is the key table for:
+        - participant-wise model vs per-person mean comparisons
+        - macro-averaged performance
+        - sample-size regression
+
+        Returns
+        -------
+        per_user_df : pd.DataFrame
+            One row per participant per pipeline.
+        """
+        n_train_map = self.df_inner_train.groupby(self.cfg.USER_COL).size().to_dict()
+        all_frames = []
+
+        # --------------------------------------------------
+        # 1) Per-user intercept baseline on inner test
+        #    Predict each participant's inner test rows by their
+        #    own mean NA from INNER TRAIN.
+        # --------------------------------------------------
+        if include_per_user_baseline:
+            train_means = self.df_inner_train.groupby(self.cfg.USER_COL)[self.cfg.LABEL_COL].mean()
+
+            y_true = self.df_inner_test[self.cfg.LABEL_COL].to_numpy()
+            user_ids = self.df_inner_test[self.cfg.USER_COL].to_numpy()
+            y_pred = self.df_inner_test[self.cfg.USER_COL].map(train_means).to_numpy()
+
+            baseline_df = self._per_user_metrics_from_arrays(
+                user_ids=user_ids,
+                y_true=y_true,
+                y_pred=y_pred,
+                pipeline_name="PerUser_Mean_Baseline",
+                split_name="inner_test",
+                n_train_map=n_train_map,
+            )
+            all_frames.append(baseline_df)
+
+        # --------------------------------------------------
+        # 2) All fitted pipelines on inner test
+        # --------------------------------------------------
+        for model_result in results_timebased:
+            pipeline_name = model_result["pipeline_name"]
+            best_estimator = model_result["best_estimator"]
+
+            feature_cols = self._get_feature_cols(pipeline_name)
+            X_eval = self.df_inner_test.loc[:, feature_cols]
+            y_true = self.df_inner_test[self.cfg.LABEL_COL].to_numpy()
+            user_ids = self.df_inner_test[self.cfg.USER_COL].to_numpy()
+
+            try:
+                y_pred = np.asarray(best_estimator.predict(X_eval)).ravel()
+            except Exception as e:
+                self.logger.error(f"[{pipeline_name}] Could not compute inner-test participant-wise predictions: {e}")
+                continue
+
+            model_df = self._per_user_metrics_from_arrays(
+                user_ids=user_ids,
+                y_true=y_true,
+                y_pred=y_pred,
+                pipeline_name=pipeline_name,
+                split_name="inner_test",
+                n_train_map=n_train_map,
+            )
+            all_frames.append(model_df)
+
+        if not all_frames:
+            return pd.DataFrame()
+
+        per_user_df = pd.concat(all_frames, axis=0).reset_index(drop=True)
+        return per_user_df
+
+    def adaptation_results_to_df(self, adaptation_results, split_name="holdout_adapt"):
+        """
+        Convert the existing nested adaptation_results dict into a tidy participant-wise DataFrame.
+
+        This is useful for holdout-user analyses for:
+        - FFNN + Embeddings adaptation
+        - PerUser_Intercept adaptation
+
+        Returns
+        -------
+        df : pd.DataFrame
+            One row per participant per pipeline.
+        """
+        rows = []
+        for pipeline_name, user_dict in adaptation_results.items():
+            if not isinstance(user_dict, dict):
+                continue
+
+            for user_id, scores in user_dict.items():
+                row = {
+                    self.cfg.USER_COL: user_id,
+                    "pipeline_name": pipeline_name,
+                    "split": split_name,
+                    "outcome": self.cfg.LABEL_COL,
+                }
+                row.update(scores)
+                row["n_total"] = row.get("n_adapt", np.nan) + row.get("n_test", np.nan)
+                row["n_train"] = row.get("n_adapt", np.nan)  # use adaptation n as training history in holdout
+                rows.append(row)
+
+        return pd.DataFrame(rows)
+
+    def compare_against_per_user_baseline(
+        self,
+        per_user_df,
+        baseline_name="PerUser_Intercept",
+        split_name=None,
+        drop_baseline_rows=True,
+    ):
+        """
+        Merge each participant/pipeline row with that participant's per-user baseline row
+        and compute performance gains.
+
+        delta_mae > 0 means the model is BETTER than the per-user baseline.
+        """
+        df = per_user_df.copy()
+
+        if split_name is not None:
+            df = df.loc[df["split"] == split_name].copy()
+
+        base = df.loc[df["pipeline_name"] == baseline_name, [
+            self.cfg.USER_COL, "split", "outcome", "mae", "rmse", "r2", "n_train", "n_test", "n_total"
+        ]].rename(columns={
+            "mae": "baseline_mae",
+            "rmse": "baseline_rmse",
+            "r2": "baseline_r2",
+            "n_train": "baseline_n_train",
+            "n_test": "baseline_n_test",
+            "n_total": "baseline_n_total",
+        })
+        base = base.drop_duplicates(subset=[self.cfg.USER_COL, "split", "outcome"])
+
+        out = df.merge(
+            base,
+            on=[self.cfg.USER_COL, "split", "outcome"],
+            how="left",
+            validate="many_to_one",
+        )
+
+        out["delta_mae"] = out["baseline_mae"] - out["mae"]
+        out["delta_rmse"] = out["baseline_rmse"] - out["rmse"]
+        out["delta_r2"] = out["r2"] - out["baseline_r2"]
+
+        if drop_baseline_rows:
+            out = out.loc[out["pipeline_name"] != baseline_name].copy()
+
+        return out.reset_index(drop=True)
+
+    def summarize_macro_scores(self, per_user_df):
+        """
+        Compute macro-averaged participant-level performance:
+        each participant contributes equally.
+
+        Works on either:
+        - raw participant-wise table
+        - comparison table returned by compare_against_per_user_baseline()
+        """
+        df = per_user_df.copy()
+
+        agg_dict = {
+            "mae": ["mean", "median"],
+            "rmse": ["mean", "median"],
+            "r2": ["mean", "median"],
+            "n_train": "mean",
+            "n_test": "mean",
+        }
+
+        if "delta_mae" in df.columns:
+            agg_dict["delta_mae"] = ["mean", "median"]
+            agg_dict["delta_rmse"] = ["mean", "median"]
+            agg_dict["delta_r2"] = ["mean", "median"]
+
+        summary = (
+            df.groupby(["outcome", "split", "pipeline_name"])
+              .agg(agg_dict)
+        )
+
+        summary.columns = [
+            "_".join([c for c in col if c]).strip("_")
+            for col in summary.columns.to_flat_index()
+        ]
+        summary = summary.reset_index()
+
+        if "delta_mae_mean" in summary.columns:
+            # proportion of participants improved vs baseline
+            prop_better = (
+                df.groupby(["outcome", "split", "pipeline_name"])["delta_mae"]
+                  .apply(lambda s: np.mean(s > 0))
+                  .reset_index(name="prop_better_than_baseline")
+            )
+            summary = summary.merge(
+                prop_better,
+                on=["outcome", "split", "pipeline_name"],
+                how="left",
+            )
+
+        # nicer names
+        rename_map = {
+            "mae_mean": "macro_mae",
+            "rmse_mean": "macro_rmse",
+            "r2_mean": "macro_r2",
+            "mae_median": "median_mae",
+            "rmse_median": "median_rmse",
+            "r2_median": "median_r2",
+            "n_train_mean": "mean_n_train",
+            "n_test_mean": "mean_n_test",
+            "delta_mae_mean": "mean_delta_mae",
+            "delta_rmse_mean": "mean_delta_rmse",
+            "delta_r2_mean": "mean_delta_r2",
+            "delta_mae_median": "median_delta_mae",
+            "delta_rmse_median": "median_delta_rmse",
+            "delta_r2_median": "median_delta_r2",
+        }
+        summary = summary.rename(columns=rename_map)
+
+        # number of participants contributing
+        n_users = (
+            df.groupby(["outcome", "split", "pipeline_name"])[self.cfg.USER_COL]
+              .nunique()
+              .reset_index(name="n_users")
+        )
+        summary = summary.merge(
+            n_users,
+            on=["outcome", "split", "pipeline_name"],
+            how="left",
+        )
+
+        return summary
+
+    def regress_delta_on_ntrain(self, comparison_df, split_name="inner_test"):
+        """
+        Regress participant-wise improvement over the per-user baseline on sample size.
+
+        Model:
+            delta_mae ~ log_n_train
+
+        Interpretation:
+            - intercept > 0: model improves over per-user baseline on average
+            - slope > 0: improvement is larger for participants with more training data
+
+        Returns
+        -------
+        regression_table : pd.DataFrame
+        fitted_models : dict
+            pipeline_name -> statsmodels fitted OLS result
+        """
+        df = comparison_df.copy()
+
+        if split_name is not None:
+            df = df.loc[df["split"] == split_name].copy()
+
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna(subset=["delta_mae", "n_train"]).copy()
+        df = df.loc[df["n_train"] > 0].copy()
+        df["log_n_train"] = np.log(df["n_train"])
+
+        results = []
+        fitted_models = {}
+
+        for pipeline_name, g in df.groupby("pipeline_name", sort=False):
+            # need enough participants for a stable regression
+            if g[self.cfg.USER_COL].nunique() < 8:
+                self.logger.warning(f"[{pipeline_name}] Too few participants for sample-size regression.")
+                continue
+
+            try:
+                fit = smf.ols("delta_mae ~ log_n_train", data=g).fit(cov_type="HC3")
+                fitted_models[pipeline_name] = fit
+
+                results.append({
+                    "outcome": g["outcome"].iloc[0],
+                    "split": g["split"].iloc[0],
+                    "pipeline_name": pipeline_name,
+                    "n_users": g[self.cfg.USER_COL].nunique(),
+                    "mean_delta_mae": g["delta_mae"].mean(),
+                    "beta_intercept": fit.params.get("Intercept", np.nan),
+                    "p_intercept": fit.pvalues.get("Intercept", np.nan),
+                    "beta_log_n_train": fit.params.get("log_n_train", np.nan),
+                    "p_log_n_train": fit.pvalues.get("log_n_train", np.nan),
+                    "r2_model": fit.rsquared,
+                })
+            except Exception as e:
+                self.logger.error(f"[{pipeline_name}] Sample-size regression failed: {e}")
+
+        regression_table = pd.DataFrame(results)
+        return regression_table, fitted_models
