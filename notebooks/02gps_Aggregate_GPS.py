@@ -32,8 +32,7 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# If your current working directory is the notebooks directory, use this:
-notebook_dir = os.getcwd()  # current working directory
+notebook_dir = os.path.dirname(os.path.abspath(__file__))  # directory of this script
 src_path = os.path.abspath(os.path.join(notebook_dir, "..", "src"))
 sys.path.append(src_path)
 
@@ -44,7 +43,6 @@ sys.path.append(parent_dir)
 import pickle
 from server_config import (
     datapath,
-    preprocessed_path_freezed,
     redcap_path,
     preprocessed_path,
 )
@@ -63,6 +61,8 @@ print(f"Loaded backup data shape: {df_backup.shape}")
 
 # %%
 debug = True  # Set to True for fast debug runs, False for full dataset runs
+if os.environ.get("DEBUG", "").lower() == "false" or "--nodebug" in sys.argv:
+    debug = False
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON!!!!!!!!!!!!!")
     # Take a small subset of participants for fast debugging
