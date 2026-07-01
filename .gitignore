@@ -307,6 +307,7 @@ ipython_config.py
 *.json
 *.7z
 *.pkl
+*.sif
 config.py
 
 # ====================

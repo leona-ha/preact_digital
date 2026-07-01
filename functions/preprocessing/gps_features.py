@@ -11,7 +11,7 @@ import statistics
 import math
 from scipy import stats
 from heapq import nlargest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from math import radians, cos, sin, asin, sqrt, log
 import string
 import pickle 
@@ -39,14 +39,87 @@ def haversine(lon1, lat1, lon2, lat2):
     meters = R * c  # Output distance in meters
     return meters
 
+def calculate_sample_weights(
+    df,
+    groupby="id",
+    max_gap=12 * 3600, # maximum 12 hours at one place
+    far_threshold=1000, # 1km is considered far 
+    far_weight=60, # assume one minute for large distances
+):
+    """
+    Calculate sample weights based on time and distance to the next sample.
+    """
+    df = df.sort_values(by=[groupby, "timestamp_start"])
+    gby = df.groupby(groupby, observed=True)
+    
+    # Time to next sample
+    time_to_next = (-gby["timestamp_start"].diff(-1)).dt.total_seconds()
+    time_to_next_clipped = time_to_next.clip(upper=max_gap).fillna(0)
+    
+    # Distance to next sample (Haversine)
+    lat_next = gby["Latitude"].shift(-1)
+    lon_next = gby["Longitude"].shift(-1)
+    
+    dist_to_next = haversine(df["Longitude"], df["Latitude"], lon_next, lat_next)
+    
+    is_far = dist_to_next > far_threshold
+    
+    weights = np.where(
+        is_far,
+        time_to_next_clipped.clip(upper=far_weight),
+        time_to_next_clipped
+    )
+    
+    return pd.Series(weights, index=df.index)
+
+def compute_row_night_time(row, start_night_hour=23, end_night_hour=6):
+    """
+    Calculate the duration of an interval that falls within a night window.
+    """
+    # Ensure inputs are parsed as pandas Timestamps
+    start = pd.to_datetime(row['local_timestamp_start'])
+    # assumed_local_endtime should be pre-calculated
+    if 'assumed_local_endtime' in row:
+        end = pd.to_datetime(row['assumed_local_endtime'])
+    else:
+        # Fallback if assumed_local_endtime is not there
+        return pd.Timedelta(0)
+    
+    # Safety check for missing or invalid intervals
+    if pd.isna(start) or pd.isna(end) or start >= end:
+        return pd.Timedelta(0)
+    
+    total_night_duration = pd.Timedelta(0)
+    
+    # Look back 1 day prior to start date to capture stays 
+    # that occur during the early morning window (00:00 - 06:00)
+    current_date = start.date() - pd.Timedelta(days=1)
+    end_date = end.date()
+    
+    while current_date <= end_date:
+        # Define the night window for the current iteration
+        night_start = pd.Timestamp.combine(current_date, time(start_night_hour, 0))
+        night_end = pd.Timestamp.combine(current_date + pd.Timedelta(days=1), time(end_night_hour, 0))
+        
+        # Calculate the intersection of the stay interval and the night window
+        overlap_start = max(start, night_start)
+        overlap_end = min(end, night_end)
+        
+        if overlap_start < overlap_end:
+            total_night_duration += (overlap_end - overlap_start)
+            
+        current_date += pd.Timedelta(days=1)
+        
+    return total_night_duration
+
 def apply_clustering(df, epsilon, min_samples):
     def db2(x):
         clustering_model = DBSCAN(eps=epsilon, min_samples=min_samples, metric="haversine")
         cluster_labels = clustering_model.fit_predict(x[['Longitude', 'Latitude']].apply(np.radians))
         return pd.DataFrame({'cluster_100m': cluster_labels})
     
-    # Group by 'customer' and apply clustering function
-    geodata_cluster_df = df.groupby('customer').apply(lambda x: db2(x)).reset_index()
+    # Group by 'id' and apply clustering function
+    geodata_cluster_df = df.groupby('id').apply(lambda x: db2(x)).reset_index()
     return geodata_cluster_df
 
 def adaptive_kmeans(x, Dkmeans=500, max_k=50):
@@ -91,7 +164,7 @@ def adaptive_kmeans(x, Dkmeans=500, max_k=50):
 
 
 def identify_home(df):
-    df['home'] = df.groupby('customer')['clusterID'].transform(lambda x: statistics.mode(x))
+    df['home'] = df.groupby('id')['clusterID'].transform(lambda x: statistics.mode(x))
     return df
 
 def isclose(loc1, loc2, threshold=30):
@@ -134,14 +207,14 @@ def cal_entropy(sig_locs):
     norm_ent = ent / (log(len(clusters)) + 1e-09)
     return ent, norm_ent
 
-def calculate_metrics(df, group_by=['customer']):
+def calculate_metrics(df, group_by=['id']):
     """
     Calculate raw entropy, entropy, normalized entropy, total distance traveled, percentage of time at home,
     number of unique clusters visited, number of non-unique clusters visited for each group defined by `group_by`.
 
     Parameters:
-    df (pd.DataFrame): DataFrame with 'customer', 'clusterID', 'home', 'Latitude', 'Longitude', 'startTimestamp', and optional 'day' columns.
-    group_by (list): List of column names to group by. Default is ['customer'].
+    df (pd.DataFrame): DataFrame with 'id', 'clusterID', 'home', 'Latitude', 'Longitude', 'timestamp_start', and optional 'day' columns.
+    group_by (list): List of column names to group by. Default is ['id'].
 
     Returns:
     pd.DataFrame: DataFrame with group levels, raw entropy, entropy, normalized entropy, total distance,
@@ -155,8 +228,8 @@ def calculate_metrics(df, group_by=['customer']):
 
         group_results = {key: val for key, val in zip(group_by, group_keys)}
 
-        group = group.sort_values(by='startTimestamp')
-        group['time_spent'] = group['startTimestamp'].diff().shift(-1).fillna(pd.Timedelta(seconds=0)).dt.total_seconds()
+        group = group.sort_values(by='timestamp_start')
+        group['time_spent'] = group['timestamp_start'].diff().shift(-1).fillna(pd.Timedelta(seconds=0)).dt.total_seconds()
 
         valid_labels = group['clusterID'][group['clusterID'] != -1]
         if len(valid_labels) == 0:
@@ -173,7 +246,7 @@ def calculate_metrics(df, group_by=['customer']):
             continue
 
         # Calculate clusters entropy
-        sig_locs = [(row['Latitude'], row['Longitude'], row['startTimestamp'], row['startTimestamp'] + pd.Timedelta(seconds=row['time_spent']), row['time_spent'], row['clusterID']) for index, row in group.iterrows()]
+        sig_locs = [(row['Latitude'], row['Longitude'], row['timestamp_start'], row['timestamp_start'] + pd.Timedelta(seconds=row['time_spent']), row['time_spent'], row['clusterID']) for index, row in group.iterrows()]
         entropy, normalized_entropy = cal_entropy(sig_locs)
         
         group_results['entropy'] = entropy
@@ -203,7 +276,7 @@ def calculate_metrics(df, group_by=['customer']):
         lat_bins = pd.cut(group['Latitude'], bins=10)
         lon_bins = pd.cut(group['Longitude'], bins=10)
         raw_entropy = 0
-        bin_counts = group.groupby([lat_bins, lon_bins]).size()
+        bin_counts = group.groupby([lat_bins, lon_bins], observed=True).size()
         total_points = bin_counts.sum()
 
         for count in bin_counts:
@@ -226,13 +299,13 @@ def calculate_metrics(df, group_by=['customer']):
 
 
 
-def calculate_transition_time(df, group_by=['customer']):
+def calculate_transition_time(df, group_by=['id']):
     """
     Calculate the transition time percentage for the raw, unfiltered GPS data for each group defined by `group_by`.
 
     Parameters:
-    df (pd.DataFrame): DataFrame with 'customer', 'Latitude', 'Longitude', 'startTimestamp', and optional 'day' columns.
-    group_by (list): List of column names to group by. Default is ['customer'].
+    df (pd.DataFrame): DataFrame with 'id', 'Latitude', 'Longitude', 'timestamp_start', and optional 'day' columns.
+    group_by (list): List of column names to group by. Default is ['id'].
 
     Returns:
     pd.DataFrame: DataFrame with group levels and transition time percentage.
@@ -247,10 +320,10 @@ def calculate_transition_time(df, group_by=['customer']):
 
         # Compute the transition time
         if len(group) > 1:
-            group = group.sort_values(by='startTimestamp')
+            group = group.sort_values(by='timestamp_start')
             latitudes = group['Latitude'].to_numpy()
             longitudes = group['Longitude'].to_numpy()
-            times = group['startTimestamp'].to_numpy()
+            times = group['timestamp_start'].to_numpy()
 
             distances = np.array([
                 haversine(lon1, lat1, lon2, lat2)
@@ -374,8 +447,10 @@ def calculate_intraclass_coefficient(geodata_cluster_merged, features):
 class HomeClusterExtractor:
     def __init__(
         self, df, speed_limit, max_distance, epsilon, min_samples, min_nights_obs, min_f_home,
-        clustering_method='dbscan', normalize_min_samples=False, min_data_points=10
+        clustering_method='dbscan', normalize_min_samples=False, min_data_points=10, n_jobs=1,
+        use_weights=False, home_v2=False, start_night_hour=23, end_night_hour=6
     ):
+        # TODO move to one correct version and remove the use_weights and home_v2 parameters
         self.df = df.copy()
         # Parameter validation
         if speed_limit <= 0:
@@ -390,8 +465,8 @@ class HomeClusterExtractor:
             raise ValueError("min_nights_obs must be at least 1.")
         if not 0 <= min_f_home <= 1:
             raise ValueError("min_f_home must be between 0 and 1.")
-        if clustering_method not in ['dbscan', 'hdbscan']:
-            raise ValueError("clustering_method must be 'dbscan' or 'hdbscan'.")
+        if clustering_method != 'dbscan':
+            raise ValueError("clustering_method must be 'dbscan'.")
         if min_data_points < 1:
             raise ValueError("min_data_points must be at least 1.")
 
@@ -404,40 +479,60 @@ class HomeClusterExtractor:
         self.clustering_method = clustering_method
         self.normalize_min_samples = normalize_min_samples
         self.min_data_points = min_data_points  # Minimum data points threshold
+        self.n_jobs = n_jobs  # For potential parallel processing in clustering
+        self.use_weights = use_weights
+        self.home_v2 = home_v2
+        self.start_night_hour = start_night_hour
+        self.end_night_hour = end_night_hour
 
-        # Ensure 'startTimestamp' is datetime
-        self.df['startTimestamp'] = pd.to_datetime(self.df['startTimestamp'], errors='coerce')
+        # Ensure 'timestamp_start' is datetime
+        self.df['timestamp_start'] = pd.to_datetime(self.df['timestamp_start'], errors='coerce')
         # Ensure 'Latitude' and 'Longitude' are floats
         self.df['Latitude'] = self.df['Latitude'].astype(float)
         self.df['Longitude'] = self.df['Longitude'].astype(float)
 
-        # Extract hour and day from 'startTimestamp'
-        self.df['hour_gps'] = self.df['startTimestamp'].dt.hour
-        self.df['day_gps'] = self.df['startTimestamp'].dt.date
+        # Extract hour and day from 'timestamp_start'
+        self.df['hour_gps'] = self.df['timestamp_start'].dt.hour
+        self.df['day_gps'] = self.df['timestamp_start'].dt.date
 
     def data_quality_check(self):
-        """Filter out customers with insufficient data points."""
-        customer_counts = self.df.groupby('customer').size().reset_index(name='point_count')
-        valid_customers = customer_counts[customer_counts['point_count'] >= self.min_data_points]['customer']
-        self.df = self.df[self.df['customer'].isin(valid_customers)]
-        logging.info(f"Data quality check: {len(valid_customers)} customers with sufficient data retained.")
+        """Filter out ids with insufficient data points."""
+        id_counts = self.df.groupby('id', observed=True).size().reset_index(name='point_count')
+        valid_ids = id_counts[id_counts['point_count'] >= self.min_data_points]['id']
+        self.df = self.df[self.df['id'].isin(valid_ids)]
+        logging.info(f"Data quality check: {len(valid_ids)} ids with sufficient data retained.")
 
     def calculate_distances_and_speeds(self):
-        """Calculate distances and speeds for each customer."""
+        """Calculate distances and speeds for each id."""
         self.df['distance'], self.df['time_diff'], self.df['speed'] = np.nan, np.nan, np.nan
 
-        for customer in self.df['customer'].unique():
-            mask = self.df['customer'] == customer
-            customer_data = self.df.loc[mask].sort_values('startTimestamp')
+        for id in self.df['id'].unique():
+            mask = self.df['id'] == id
+            id_data = self.df.loc[mask].sort_values('timestamp_start')
 
-            distances = self._calculate_distances(customer_data)
-            time_diffs = customer_data['startTimestamp'].diff().dt.total_seconds().fillna(0)
+            distances = self._calculate_distances(id_data)
+            time_diffs = id_data['timestamp_start'].diff().dt.total_seconds().fillna(0)
             speeds = distances / time_diffs.replace(0, np.nan)
 
-            # Assign calculated values using customer_data.index to ensure alignment
-            self.df.loc[customer_data.index, 'distance'] = distances
-            self.df.loc[customer_data.index, 'time_diff'] = time_diffs
-            self.df.loc[customer_data.index, 'speed'] = speeds
+            # Assign calculated values using id_data.index to ensure alignment
+            self.df.loc[id_data.index, 'distance'] = distances
+            self.df.loc[id_data.index, 'time_diff'] = time_diffs
+            self.df.loc[id_data.index, 'speed'] = speeds
+
+    def calculate_distances_and_speeds_v2(self):
+        """Calculate distances and speeds to the NEXT sample."""
+        self.df = self.df.sort_values(by=['id', 'timestamp_start'])
+        gby = self.df.groupby('id', observed=True)
+        
+        self.df['time_diff'] = (-gby['timestamp_start'].diff(-1)).dt.total_seconds()
+        
+        lat_next = gby['Latitude'].shift(-1)
+        lon_next = gby['Longitude'].shift(-1)
+        
+        self.df['distance'] = haversine(self.df['Longitude'], self.df['Latitude'], lon_next, lat_next)
+        self.df['speed'] = self.df['distance'] / self.df['time_diff'].replace(0, np.nan)
+        self.df['distance'] = self.df['distance'].fillna(0)
+        self.df['time_diff'] = self.df['time_diff'].fillna(0)
 
     def calculate_stationary_and_transition(self):
         """Determine stationary points and transition status based on speed and distance."""
@@ -466,15 +561,24 @@ class HomeClusterExtractor:
         c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
         return R * c
 
+    def _to_xyz(self, df):
+        R = 6371000
+        lat_rad = np.radians(df['Latitude'])
+        lon_rad = np.radians(df['Longitude'])
+        x = R * np.cos(lat_rad) * np.cos(lon_rad)
+        y = R * np.cos(lat_rad) * np.sin(lon_rad)
+        z = R * np.sin(lat_rad)
+        return x, y, z
+
     def apply_clustering(self, df):
         """Apply clustering based on the selected method."""
         df_cleaned = df.dropna(subset=['Longitude', 'Latitude'])
 
         clusters = []
-        for customer_id, group_df in df_cleaned.groupby('customer'):
-            # Ensure 'customer' column is in the DataFrame
+        for id_id, group_df in df_cleaned.groupby('id', observed=True):
+            # Ensure 'id' column is in the DataFrame
             group_df = group_df.copy()
-            group_df['customer'] = customer_id
+            group_df['id'] = id_id
             cluster_result = self._apply_clustering_method(group_df)
             clusters.append(cluster_result)
 
@@ -484,33 +588,33 @@ class HomeClusterExtractor:
 
     def _apply_clustering_method(self, df):
         """Helper method to apply the chosen clustering method."""
-        customer_point_count = len(df)
-        customer_id = df['customer'].iloc[0]
+        id_point_count = len(df)
+        id_id = df['id'].iloc[0]
 
-        # Skip clustering for customers with too few points
-        if customer_point_count < self.min_data_points:
-            logging.info(f"Customer {customer_id} has too few data points ({customer_point_count}). Skipping clustering.")
+        # Skip clustering for ids with too few points
+        if id_point_count < self.min_data_points:
+            logging.info(f"id {id_id} has too few data points ({id_point_count}). Skipping clustering.")
             df['cluster'] = -1
             return df
 
         # Use normalized min_samples or a default value
         if self.normalize_min_samples:
-            min_samples = max(2, int(customer_point_count * 0.03))  # 3% of points, with a minimum of 2
+            min_samples = max(2, int(id_point_count * 0.03))  # 3% of points, with a minimum of 2
         else:
             min_samples = self.min_samples
 
+        # Always use XYZ and Euclidean
+        x, y, z = self._to_xyz(df)
+        X = np.column_stack((x, y, z))
+        metric = "euclidean"
+        eps = self.epsilon
+
+        sample_weight = df['sample_weight'] if 'sample_weight' in df.columns else None
+
         if self.clustering_method == 'dbscan':
-            clustering_model = DBSCAN(eps=self.epsilon, min_samples=min_samples, metric="haversine")
-            cluster_labels = clustering_model.fit_predict(df[['Longitude', 'Latitude']].apply(np.radians))
-            cluster_labels = cluster_labels.astype(int)
-            df['cluster'] = cluster_labels
-            return df
-        elif self.clustering_method == 'hdbscan':
-            min_cluster_size = max(2, min(min_samples, customer_point_count))
-            clustering_model = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, metric='haversine')
-            cluster_labels = clustering_model.fit_predict(df[['Longitude', 'Latitude']].apply(np.radians))
-            cluster_labels = cluster_labels.astype(int)
-            df['cluster'] = cluster_labels
+            clustering_model = DBSCAN(eps=eps, min_samples=min_samples, metric=metric, n_jobs=self.n_jobs)
+            cluster_labels = clustering_model.fit_predict(X, sample_weight=sample_weight)
+            df['cluster'] = cluster_labels.astype(int)
             return df
         else:
             raise ValueError(f"Invalid clustering method: {self.clustering_method}")
@@ -541,17 +645,17 @@ class HomeClusterExtractor:
                     else:
                         return np.nan
 
-                # Calculate the most frequent cluster (mode) per customer at night
-                valid_clusters_night['home'] = valid_clusters_night.groupby('customer')['cluster'].transform(safe_mode)
+                # Calculate the most frequent cluster (mode) per id at night
+                valid_clusters_night['home'] = valid_clusters_night.groupby('id')['cluster'].transform(safe_mode)
 
-                # Calculate the number of unique nights with observations for each customer
-                valid_clusters_night['nights_with_obs'] = valid_clusters_night.groupby('customer')['day_gps'].transform('nunique')
+                # Calculate the number of unique nights with observations for each id
+                valid_clusters_night['nights_with_obs'] = valid_clusters_night.groupby('id')['day_gps'].transform('nunique')
 
-                # Count the number of points in the identified home cluster per customer
-                valid_clusters_night['n_home'] = valid_clusters_night.groupby(['customer', 'home'])['day_gps'].transform('size')
+                # Count the number of points in the identified home cluster per id
+                valid_clusters_night['n_home'] = valid_clusters_night.groupby(['id', 'home'])['day_gps'].transform('size')
 
-                # Calculate the total number of night-time points for each customer
-                valid_clusters_night['night_obs'] = valid_clusters_night.groupby('customer')['day_gps'].transform('size')
+                # Calculate the total number of night-time points for each id
+                valid_clusters_night['night_obs'] = valid_clusters_night.groupby('id')['day_gps'].transform('size')
 
                 # Calculate the fraction of night-time points spent at home
                 valid_clusters_night['f_home'] = valid_clusters_night['n_home'] / valid_clusters_night['night_obs']
@@ -562,52 +666,94 @@ class HomeClusterExtractor:
                 )
 
                 # Merge the time-based home assignment back into the main dataframe
-                home_mapping = valid_clusters_night[['customer', 'home']].drop_duplicates(subset=['customer'])
-                geodata_clusters = geodata_clusters.merge(home_mapping, on='customer', how='left', suffixes=('', '_temp'))
+                home_mapping = valid_clusters_night[['id', 'home']].drop_duplicates(subset=['id'])
+                geodata_clusters = geodata_clusters.merge(home_mapping, on='id', how='left', suffixes=('', '_temp'))
                 # Use 'home_temp' where 'home' is NaN
                 geodata_clusters['home'] = geodata_clusters['home'].fillna(geodata_clusters['home_temp'])
                 geodata_clusters.drop(columns=['home_temp'], inplace=True)
 
-        # Fallback: Assign the largest cluster per customer from all data points if no home is found
-        no_home_customers = geodata_clusters.loc[geodata_clusters['home'].isna(), 'customer'].unique()
-        logging.info(f"Customers with no home after time-based method: {len(no_home_customers)}")
+        # Fallback: Assign the largest cluster per id from all data points if no home is found
+        no_home_ids = geodata_clusters.loc[geodata_clusters['home'].isna(), 'id'].unique()
+        logging.info(f"ids with no home after time-based method: {len(no_home_ids)}")
 
-        if len(no_home_customers) > 0:
-            # Consider all points (not just night-time) for customers with no home cluster
+        if len(no_home_ids) > 0:
+            # Consider all points (not just night-time) for ids with no home cluster
             fallback_home_clusters = (
-                geodata_clusters[geodata_clusters['customer'].isin(no_home_customers) & (geodata_clusters['cluster'] != -1)]
-                .groupby(['customer', 'cluster'])
+                geodata_clusters[geodata_clusters['id'].isin(no_home_ids) & (geodata_clusters['cluster'] != -1)]
+                .groupby(['id', 'cluster'])
                 .size()
                 .reset_index(name='cluster_size')
             )
 
             if not fallback_home_clusters.empty:
-                # Take the largest cluster per customer based on all data points
+                # Take the largest cluster per id based on all data points
                 fallback_home_clusters = fallback_home_clusters.loc[
-                    fallback_home_clusters.groupby('customer')['cluster_size'].idxmax()
+                    fallback_home_clusters.groupby('id')['cluster_size'].idxmax()
                 ]
 
                 # Assign the fallback home clusters
                 fallback_home_clusters['home'] = fallback_home_clusters['cluster']
 
                 # Merge fallback home clusters back to the main dataset
-                fallback_home_mapping = fallback_home_clusters[['customer', 'home']].drop_duplicates()
-                geodata_clusters = geodata_clusters.merge(fallback_home_mapping, on='customer', how='left', suffixes=('', '_fallback'))
+                fallback_home_mapping = fallback_home_clusters[['id', 'home']].drop_duplicates()
+                geodata_clusters = geodata_clusters.merge(fallback_home_mapping, on='id', how='left', suffixes=('', '_fallback'))
 
                 # Fill any remaining NaNs in the 'home' column with the fallback cluster
                 geodata_clusters['home'] = geodata_clusters['home'].fillna(geodata_clusters['home_fallback'])
                 geodata_clusters.drop(columns=['home_fallback'], inplace=True)
                 logging.info(f"Fallback home clusters assigned: {len(fallback_home_clusters)}")
 
-        # For customers that still have no home cluster after the fallback
-        final_no_home = geodata_clusters.loc[geodata_clusters['home'].isna(), 'customer'].unique()
-        logging.warning(f"{len(final_no_home)} customers still do not have a home cluster.")
+        # For ids that still have no home cluster after the fallback
+        final_no_home = geodata_clusters.loc[geodata_clusters['home'].isna(), 'id'].unique()
+        logging.warning(f"{len(final_no_home)} ids still do not have a home cluster.")
 
-        # Create homeID by combining customer and home cluster
+        # Create homeID by combining id and home cluster
         geodata_clusters['homeID'] = geodata_clusters.apply(
-            lambda x: f"{x['customer']}00{int(x['home'])}" if pd.notna(x['home']) else None, axis=1
+            lambda x: f"{x['id']}00{int(x['home'])}" if pd.notna(x['home']) else None, axis=1
         )
 
+        return geodata_clusters
+
+    def find_home_cluster_v2(self, geodata_clusters):
+        """Identify home cluster based on weighted night-time duration."""
+        # TODO use the conditions # Apply both conditions: Minimum nights observed and minimum fraction of time spent at home
+        if 'sample_weight' not in geodata_clusters.columns:
+            logging.warning("sample_weight not found, using default home estimation.")
+            return self.find_home_cluster(geodata_clusters)
+            
+        df = geodata_clusters.copy()
+        df["assumed_duration"] = df["sample_weight"]
+        # local_timestamp_start is assumed to be in the df
+        df["assumed_local_endtime"] = df["local_timestamp_start"] + pd.to_timedelta(df["assumed_duration"], unit="s")
+        
+        # Apply compute_row_night_time
+        df["night_duration"] = df.apply(
+            lambda row: compute_row_night_time(row, self.start_night_hour, self.end_night_hour), 
+            axis=1
+        )
+        
+        # Sum night duration per id and cluster
+        cluster_summary = df.groupby(["id", "cluster"])["night_duration"].sum().reset_index()
+        
+        # Exclude noise (-1)
+        cluster_summary = cluster_summary[cluster_summary["cluster"] != -1]
+        
+        if cluster_summary.empty:
+            logging.warning("No valid clusters found for home estimation v2. Falling back.")
+            return self.find_home_cluster(geodata_clusters)
+
+        # Pick cluster with max night duration per id
+        home_clusters = cluster_summary.loc[cluster_summary.groupby("id")["night_duration"].idxmax()]
+        home_mapping = home_clusters.set_index('id')['cluster'].to_dict()
+        
+        geodata_clusters['home'] = geodata_clusters['id'].map(home_mapping)
+        geodata_clusters['home'] = geodata_clusters['home'].fillna(np.nan)
+        
+        # Create homeID
+        geodata_clusters['homeID'] = geodata_clusters.apply(
+            lambda x: f"{x['id']}00{int(x['home'])}" if pd.notna(x['home']) else None, axis=1
+        )
+        
         return geodata_clusters
 
     def determine_if_at_home(self, df):
@@ -618,8 +764,8 @@ class HomeClusterExtractor:
         df['home'] = df['home'].astype(int, errors='ignore')  # Handle NaNs gracefully
 
         # Create clusterID and homeID, ensuring no decimal points
-        df['clusterID'] = df.apply(lambda x: f"{x['customer']}00{int(x['cluster'])}" if x['cluster'] != -1 else None, axis=1)
-        df['homeID'] = df.apply(lambda x: f"{x['customer']}00{int(x['home'])}" if pd.notna(x['home']) else None, axis=1)
+        df['clusterID'] = df.apply(lambda x: f"{x['id']}00{int(x['cluster'])}" if x['cluster'] != -1 else None, axis=1)
+        df['homeID'] = df.apply(lambda x: f"{x['id']}00{int(x['home'])}" if pd.notna(x['home']) else None, axis=1)
 
         # Check if a person is at home (-1 if no valid cluster/home)
         df['at_home'] = df.apply(
@@ -629,29 +775,38 @@ class HomeClusterExtractor:
 
     def run(self):
         """Run the full extraction process."""
+        logging.info("Starting home cluster extraction process.")
         self.data_quality_check()
-        self.calculate_distances_and_speeds()
+        logging.info("Data quality check completed.")
+        
+        if self.use_weights:
+            self.calculate_distances_and_speeds_v2()
+            self.df['sample_weight'] = calculate_sample_weights(self.df)
+        else:
+            self.calculate_distances_and_speeds()
+            
+        logging.info("Distance and speed calculations completed.")
         self.df = self.calculate_stationary_and_transition()
+        logging.info("Stationary and transition points calculated.")
 
         # Apply clustering based on all data (not just stationary points)
         geodata_cluster_df = self.apply_clustering(self.df)
+        logging.info("Clustering completed.")
 
         # Merge clustering results back to the original dataframe, including transition points
         geodata_clusters = geodata_cluster_df.copy()
         # Fill NaNs in 'cluster' with -1
         geodata_clusters['cluster'] = geodata_clusters['cluster'].fillna(-1)
 
-        # Find home cluster with fallback
-        geodata_clusters = self.find_home_cluster(geodata_clusters)
+        # Find home cluster
+        if self.home_v2:
+            geodata_clusters = self.find_home_cluster_v2(geodata_clusters)
+        else:
+            geodata_clusters = self.find_home_cluster(geodata_clusters)
+        logging.info("Home cluster finding completed.")
 
         # Determine if the person is at home
         geodata_clusters = self.determine_if_at_home(geodata_clusters)
+        logging.info("At-home determination completed.")
 
         return geodata_clusters
-
-
-
-
-
-
-
