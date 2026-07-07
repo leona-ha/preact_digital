@@ -1307,7 +1307,6 @@ fig2.show()
 
 
 
-
 # %% [markdown]
 # #### DELETE LATER [START]
 
@@ -1363,6 +1362,155 @@ fig = px.line(
 )
 
 fig.show()
+
+# %% [markdown]
+# DELETE LATER [KEEP GOING, END IS FURTHER]
+
+# %%
+# Plot the number of ECG sessions and active EMA phases per day
+import os
+import numpy as np
+import pandas as pd
+import plotly.express as px
+
+# 1. Load the metadata containing the EMA start and end dates
+meta_path = "/sc-projects/sc-proj-cc15-preact/SP6/preprocessed/meta/SP6_meta_data.csv"
+if os.path.exists(meta_path):
+    df_meta = pd.read_csv(meta_path)
+    
+    # Parse all EMA start/end date columns
+    date_cols = [
+        "ema_base_start", "ema_base_end",
+        "ema_t20_start", "ema_t20_end",
+        "ema_post_start", "ema_post_end"
+    ]
+    for col in date_cols:
+        df_meta[col] = pd.to_datetime(df_meta[col], errors="coerce", dayfirst=True, utc=True).dt.tz_localize(None).dt.normalize()
+    
+    # 2. Get date range from df_2_sessions
+    df_2_sessions_dates = pd.to_datetime(df_2_sessions["date"]).dt.normalize()
+    min_date = df_2_sessions_dates.min()
+    max_date = df_2_sessions_dates.max()
+    
+    if pd.notna(min_date) and pd.notna(max_date):
+        date_range = pd.date_range(start=min_date, end=max_date, freq="D")
+        
+        # Calculate daily ECG sessions count
+        ecg_counts = df_2_sessions_dates.value_counts().reindex(date_range, fill_value=0)
+        
+        # Calculate number of active EMA participants/phases per day
+        active_ema_counts = []
+        for d in date_range:
+            is_active = (
+                ((df_meta["ema_base_start"] <= d) & (d <= df_meta["ema_base_end"])) |
+                ((df_meta["ema_t20_start"] <= d) & (d <= df_meta["ema_t20_end"])) |
+                ((df_meta["ema_post_start"] <= d) & (d <= df_meta["ema_post_end"]))
+            )
+            active_ema_counts.append(is_active.sum())
+            
+        # Combine into a single DataFrame for plotting
+        df_plot = pd.DataFrame({
+            "Date": date_range,
+            "ECG Sessions": ecg_counts.values,
+            "Active EMA Participants": active_ema_counts
+        })
+        
+        # Melt to plot both metrics on the same graph
+        df_plot_melted = df_plot.melt(
+            id_vars=["Date"],
+            value_vars=["ECG Sessions", "Active EMA Participants"],
+            var_name="Metric",
+            value_name="Count"
+        )
+        
+        fig_compare = px.line(
+            df_plot_melted,
+            x="Date",
+            y="Count",
+            color="Metric",
+            title="Daily ECG Sessions and Active EMA Participants",
+            labels={"Date": "Date", "Count": "Count"}
+        )
+        
+        # Add milestone vertical line
+        fig_compare.add_vline(
+            x=pd.Timestamp("2025-09-30"),
+            line_dash="dash",
+            line_color="black",
+            line_width=2,
+        )
+        fig_compare.add_annotation(
+            x=pd.Timestamp("2025-09-30"),
+            y=1.02,
+            xref="x",
+            yref="paper",
+            text="30 Sep 2025",
+            showarrow=False,
+            textangle=-90,
+            font=dict(size=10, color="black"),
+            bgcolor="white",
+            bordercolor="black",
+            borderwidth=1,
+            borderpad=2,
+        )
+        
+        fig_compare.show()
+
+        # 3. Calculate ratio (ECG sessions / active participants)
+        df_plot["Sessions per Active Participant"] = (
+            df_plot["ECG Sessions"] / df_plot["Active EMA Participants"]
+        ).replace([np.inf, -np.inf], np.nan)
+        
+        fig_ratio = px.line(
+            df_plot,
+            x="Date",
+            y="Sessions per Active Participant",
+            title="Daily ECG Sessions / Active EMA Participants Ratio",
+            labels={"Date": "Date", "Sessions per Active Participant": "Ratio (ECG Sessions / Active Participants)"}
+        )
+        
+        # Add milestone vertical line
+        fig_ratio.add_vline(
+            x=pd.Timestamp("2025-09-30"),
+            line_dash="dash",
+            line_color="black",
+            line_width=2,
+        )
+        fig_ratio.add_annotation(
+            x=pd.Timestamp("2025-09-30"),
+            y=1.02,
+            xref="x",
+            yref="paper",
+            text="30 Sep 2025",
+            showarrow=False,
+            textangle=-90,
+            font=dict(size=10, color="black"),
+            bgcolor="white",
+            bordercolor="black",
+            borderwidth=1,
+            borderpad=2,
+        )
+        
+        fig_ratio.show()
+
+        # 4. Save those figs to pyprojroot / tmp folder
+        tmp_dir = here() / "tmp"
+        os.makedirs(tmp_dir, exist_ok=True)
+        try:
+            fig_compare.write_html(str(tmp_dir / "ecg_sessions_vs_active_ema.html"))
+            fig_compare.write_image(str(tmp_dir / "ecg_sessions_vs_active_ema.png"), scale=2)
+        except Exception as e:
+            print(f"Error saving comparison plot: {e}")
+            
+        try:
+            fig_ratio.write_html(str(tmp_dir / "ecg_sessions_ratio.html"))
+            fig_ratio.write_image(str(tmp_dir / "ecg_sessions_ratio.png"), scale=2)
+        except Exception as e:
+            print(f"Error saving ratio plot: {e}")
+    else:
+        print("Warning: ECG session dates are empty or invalid.")
+else:
+    print(f"Warning: Metadata file not found at {meta_path}")
 
 # %% [markdown]
 # #### DELETE LATER [END]
