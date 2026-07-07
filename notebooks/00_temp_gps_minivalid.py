@@ -42,9 +42,8 @@ for p in (PROJECT_ROOT, PREPROCESSING_DIR):
     if str(p) not in sys.path:
         sys.path.append(str(p))
 
-# from server_config import datapath, proj_sheet, preprocessed_path, raw_path#, backup_path
-datapath = "/sc-projects/sc-proj-cc15-preact/SP6"
-raw_path = datapath + "/raw"
+from server_config import base_path
+raw_path = base_path / "raw"
 
 from functions.preprocessing.infer_timeoffset import (
     create_utcday_tzoffset_df,

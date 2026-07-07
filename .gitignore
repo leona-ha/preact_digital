@@ -1,3 +1,7 @@
+# .scratch local files
+.scratch
+
+
 # Ignore Quarto cache and output directories
 /.quarto/
 /_site/
