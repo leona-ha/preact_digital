@@ -301,6 +301,7 @@ dependencies:
       - pygments==2.19.1
       - pyreadstat==1.2.8
       - python-json-logger==3.2.1
+      - python-dotenv==1.2.2
       - pytz==2024.2
       - pyyaml==6.0.2
       - pyzmq==26.2.0

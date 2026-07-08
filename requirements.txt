@@ -139,6 +139,7 @@ pyparsing
 pyreadstat==1.2.8
 # python-dateutil @ file:///home/conda/feedstock_root/build_artifacts/python-dateutil_1733215673016/work
 python-dateutil
+python-dotenv==1.2.2
 python-json-logger==3.2.1
 # pytz @ file:///home/conda/feedstock_root/build_artifacts/pytz_1706886791323/work
 pytz

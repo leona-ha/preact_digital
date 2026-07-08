@@ -43,12 +43,7 @@ sys.path.append(src_path)
 parent_dir = os.path.abspath(os.path.join(notebook_dir, ".."))
 sys.path.append(parent_dir)
 import pickle
-from server_config import (
-    datapath,
-    preprocessed_path_freezed,
-    proj_sheet,
-    preprocessed_path,
-)
+from server_config import base_path
 
 from functions.preprocessing.aggregation import (
     aggregate_sleep_daily,
@@ -63,9 +58,7 @@ from functions.preprocessing.aggregation import (
 # ## Load Data
 
 # %%
-backup_path = (
-    "/sc-projects/sc-proj-cc15-preact/SP6/raw/backup_passive_recent.feather"
-)
+backup_path = base_path / "raw" / "backup_passive_recent.feather"
 df_backup = pd.read_feather(backup_path)
 print(f"Loaded backup data shape: {df_backup.shape}")
 
@@ -228,7 +221,7 @@ if debug:
     output_dir = Path(__file__).resolve().parent if "__file__" in locals() else Path.cwd()
     output_path = output_dir / "daily_aggregated_all_passive_debug.feather"
 else:
-    passive_daily_dir = Path("/sc-projects/sc-proj-cc15-preact/SP6/preprocessed/passive/daily/")
+    passive_daily_dir = base_path / "preprocessed" / "passive" / "daily"
     output_path = passive_daily_dir / "daily_aggregated_all_passive.feather"
 
 df_daily.to_feather(output_path)
