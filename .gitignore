@@ -303,6 +303,7 @@ ipython_config.py
 *.local
 *.swp
 *.swo
+logs
 
 # ====================
 # Data files to ignore

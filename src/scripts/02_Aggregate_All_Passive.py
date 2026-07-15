@@ -211,7 +211,7 @@ print(f"Date range: {df_daily['local_day'].min()} to {df_daily['local_day'].max(
 # # save the aggregated daily data
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON: Saving locally inside the repository!!!!!!!!!!!!!")
-    output_dir = Path(__file__).resolve().parent if "__file__" in locals() else Path.cwd()
+    output_dir = here() / "tmp"
     output_path = output_dir / "daily_aggregated_all_passive_debug.feather"
 else:
     passive_daily_dir = base_path / "preprocessed" / "passive" / "daily"
