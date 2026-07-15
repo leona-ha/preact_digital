@@ -63,7 +63,7 @@ df_backup = pd.read_feather(backup_path)
 print(f"Loaded backup data shape: {df_backup.shape}")
 
 # %%
-debug = True  # Set to True for fast debug runs, False for full dataset runs
+debug = False  # Set to True for fast debug runs, False for full dataset runs
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON!!!!!!!!!!!!!")
     # Take a small subset of participants for fast debugging
