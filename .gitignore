@@ -71,6 +71,7 @@ tmp
 # ====================
 **/.ipynb_checkpoints/
 *.nbconvert.ipynb
+src/scripts/*.ipynb
 
 # ====================
 # Virtual environments
