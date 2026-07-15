@@ -92,7 +92,7 @@
 #
 #     - ~~some rows in the .csv files have more than 9000 data points (72000 means 8x 9000, 54000 means 6x 9000, 45000 means 5x 9000, 27000 means 3x 9000, 18000 means 2x 9000 -> after inspecting single files, it seems so that some data are stored more than once but it is not completely clear (needs more investigation). every single file should only contain 9000 data points!~~
 #
-#     - the latest .csv file is from 30.09.2025 -> either this is a code bug OR an export bug from thrive - please double check (some 2026 folders seem to include only Nokia_300.csv files with timestamps from 2025 and 2024)
+#     - ~~the latest .csv file is from 30.09.2025 -> either this is a code bug OR an export bug from thrive - please double check (some 2026 folders seem to include only Nokia_300.csv files with timestamps from 2025 and 2024)~~
 #
 # * ~~Concatenate the cleaned raw data from March - Nov 2023 with the once from Nov23 - today~~
 #
@@ -102,9 +102,9 @@
 #
 # * If it's high overall, go back into the preproc loop and investigate which parameters you could adjust and play around (ideally based on literature evidence so we can cite and argue why we chose which parameter in which size)
 #
-# * When you have a final version add the following columns to the data frame or make sure they are already included: ID, FOR-ID, timestamp, measurement_burst, ecg_session_nr (e.g. b1_d1_ecg_ses1, b1_d1_ecg_ses2), ema ecg control item
+# * When you have a final version add the following columns to the data frame or make sure they are already included: ID, FOR-ID, timestamp, measurement_burst, ecg_session_nr (e.g. b1_d1_ecg_ses1, b1_d1_ecg_ses2), ema ecg control item - TODO check for the new data
 #
-# * export as .parquet
+# * ~~export as .parquet~~
 #
 #
 # Further TO-DO's that can be tackled afterwards:
@@ -115,7 +115,7 @@
 # %% [markdown]
 # ---
 
-# %%
+# %% vscode={"languageId": "python"}
 from pyprojroot import here
 import sys
 sys.path.insert(0, str(here()))
@@ -173,7 +173,7 @@ ema_path = preprocessed_path / "ema_content.pkl"
 # path: `/sc-projects/sc-proj-cc15-preact/SP6/backup/first_backup/tiki_backup_2023-03-14_1.csv ...` [latest Update 2025-09-21]
 #
 
-# %%
+# %% vscode={"languageId": "python"}
 # define the pattern for passive data files
 file_pattern = os.path.join(backup_path, "first_backup/tiki_backup_*.csv")
 
@@ -183,7 +183,7 @@ file_list = glob.glob(file_pattern)
 # sort the file list for consistent ordering
 file_list.sort()
 
-# %%
+# %% vscode={"languageId": "python"}
 # define the dtype for columns that are known to be problematic
 dtype_spec = {
     "startTimestamp": "str",  # load as string initially
@@ -223,14 +223,14 @@ df_1 = pd.concat(all_dfs, ignore_index=True)
 df_1.drop(columns=["date", "index"], inplace=True)
 
 
-# %%
+# %% vscode={"languageId": "python"}
 df_1.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 # sanity check: all IDs included? CHECK
 len(df_1["customer"].unique())
 
-# %%
+# %% vscode={"languageId": "python"}
 # sanity check: entire period included? CHECK
 min_starttimestamp = df_1["startTimestamp"].min()
 max_endtimestamp = df_1["endTimestamp"].max()
@@ -240,15 +240,15 @@ print(max_endtimestamp)
 # 2023-03-14 13:13:20+00:00
 # 2023-11-21 08:05:00+00:00
 
-# %%
+# %% vscode={"languageId": "python"}
 # quick sanity check
 "stringValue" in df_1.columns
 
-# %%
+# %% vscode={"languageId": "python"}
 # datetime is still UTC+01:00
 df_1.dtypes
 
-# %%
+# %% vscode={"languageId": "python"}
 # adjust datetime to UTC
 for col in ["startTimestamp", "endTimestamp"]:
     df_1[col] = pd.to_datetime(df_1[col], utc=True, errors="coerce", unit="ms")
@@ -262,7 +262,7 @@ df_1["customer"] = df_1.customer.str.split("@").str.get(0)
 df_1["customer"] = df_1["customer"].str[:4]
 
 
-# %%
+# %% vscode={"languageId": "python"}
 # rename columns
 df_1.rename(
     columns={
@@ -290,17 +290,17 @@ df_1 = df_1[
 ]
 
 
-# %%
+# %% vscode={"languageId": "python"}
 # filter ecg data
 df_1_filtered = df_1[df_1["modality"] == "RawECGVoltage"].copy()
 
 df_1_filtered.head(3)
 
-# %%
+# %% vscode={"languageId": "python"}
 # very first ECG session is April 27 2023
 df_1_filtered["timestamp_start"].min()
 
-# %%
+# %% vscode={"languageId": "python"}
 # total unique IDs
 print("All modalities:", df_1["id"].nunique())
 
@@ -325,7 +325,7 @@ print("--------------------")
 #  
 # One string (= 1 row) contains 300 samples, i.e. all samples for 1 sec)
 
-# %%
+# %% vscode={"languageId": "python"}
 # convert stringValues in two separte variables: t and v
 
 
@@ -353,7 +353,7 @@ assert all(df_1_filtered["t"].str.len() == df_1_filtered["v"].str.len()), (
 )
 
 
-# %%
+# %% vscode={"languageId": "python"}
 print(len(df_1_filtered))
 df_1_filtered.head()
 
@@ -364,7 +364,7 @@ df_1_filtered.head()
 # - `0NEG` 2023-10-09 22:18 - the first 20 seconds of samples is duplicated, drop the duplicated for this patient and day before concatenating
 #
 
-# %%
+# %% vscode={"languageId": "python"}
 # concatenate contiguous ECG chunks into one packed row per session (no explode)
 # a new session starts when current timestamp_start != previous timestamp_end for the same id
 
@@ -467,7 +467,7 @@ df_1_sessions = df_1_sessions.drop(columns=["n_chunks", "duration_s", "n_samples
 
 df_1_sessions
 
-# %%
+# %% vscode={"languageId": "python"}
 # renamed df_1_ecg to df_1_exploded
 # take each list in the specified columns (ecg_relative_t, ecg_v) and expand them so that each item in the list becomes its own row
 # df_1_exploded = df_1_filtered.explode(["t", "v"]).reset_index(drop=True)
@@ -483,11 +483,11 @@ df_1_sessions.drop(
 # -> changed that, so the 9001 sample is the next session (different timestamp_start) -> YES
 df_1_exploded.iloc[8995:9005]
 
-# %%
+# %% vscode={"languageId": "python"}
 # sanity check (all IDs included)
 df_1_exploded["id"].nunique()
 
-# %%
+# %% vscode={"languageId": "python"}
 # general plausibility check before preprocessing (values in V)
 print("Max:", df_1_exploded["v"].max())
 print("Min:", df_1_exploded["v"].min())
@@ -495,18 +495,18 @@ print("Min:", df_1_exploded["v"].min())
 # typical QRS complex (= one heartbeat) for a scanwatch is: 0.3 - 1.5 mV
 # Max/Min values are quite high/low (possible noise/artefacts)
 
-# %%
+# %% vscode={"languageId": "python"}
 # general plausibility check: row comparison before stringValue extraction vs. after
 print("df_1_filtered shape:", df_1_filtered.shape)
 print("df_1_exploded shape:", df_1_exploded.shape)
 
-# %%
+# %% vscode={"languageId": "python"}
 # remove unnecessary columns
 # -> already not included
 # df_1_exploded = df_1_exploded.drop(columns=["stringValue", "booleanValue","doubleValue","longValue"])
 df_1_exploded
 
-# %%
+# %% vscode={"languageId": "python"}
 # final data frame
 # -> use df_1_sessions, as it's easier to work with
 # df_1_exploded.head()
@@ -532,7 +532,7 @@ df_1_sessions.head()
 # - the same files in multiple exports are read multiple times
 #     if we only analyze a subset, the it skews the analysis
 
-# %%
+# %% vscode={"languageId": "python"}
 # build file_list efficiently: keep one file per sample ID from the latest export
 export_root = Path(raw_path) / "tiki_backup_files"
 export_dirs = [p for p in export_root.glob("export_tiki_*") if p.is_dir()]
@@ -590,12 +590,12 @@ print("Newest export folder (by parsed date):", export_dirs_sorted[0].name)
 # %% [markdown]
 # so the problem here is that we reread the same sample multiple times (~60)
 
-# %%
+# %% vscode={"languageId": "python"}
 sample_ids = [f.split("/")[-1] for f in file_list]
 len(set(sample_ids))
 
 
-# %%
+# %% vscode={"languageId": "python"}
 # check whether the newest export folder contains all sample IDs seen across exports
 import pandas as pd
 
@@ -655,7 +655,7 @@ if missing_in_latest:
 else:
     print("\nAll sample IDs are included in the latest export.")
 
-# %%
+# %% vscode={"languageId": "python"}
 # sanity check: latest recorded ecg session (latest timestamp is 2025-09-30)
 # where are the data between October 2025 and April 2026? again a change in data format by thrive?
 # At least some 2026 folder seem to include no Nokia_300.csv files with a 2026 timestamp
@@ -673,7 +673,7 @@ latest_file = max(file_list, key=extract_ts_fast)
 print("Latest file:", latest_file)
 print("Timestamp:", extract_ts_fast(latest_file))
 
-# %%
+# %% vscode={"languageId": "python"}
 # build dataframe from file_list with: long_id, timestamp, export_date, filepath
 
 if "file_list" not in globals() or len(file_list) == 0:
@@ -749,10 +749,10 @@ df_file_list.head()
 # %% [markdown]
 # ------------
 
-# %%
+# %% vscode={"languageId": "python"}
 df_file_list.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 len(file_list)
 
 # %% [markdown]
@@ -769,7 +769,7 @@ len(file_list)
 # - there are also not that many .csv files (*look above*), as they are contained in each week's export
 # so it's not that slow and i made it faster with paralellization (make sure to secure multiple cpus)
 
-# %%
+# %% vscode={"languageId": "python"}
 # build df_2_concat from file_list: one row per ECG session/file with parsed t and v arrays
 if "file_list" not in globals() or len(file_list) == 0:
     raise RuntimeError(
@@ -875,13 +875,13 @@ print(f"Failed files: {len(failed_files)}")
 
 df_2_concat.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 df_2_concat["n_samples"].value_counts()
 
 # %% [markdown]
 # ----------
 
-# %%
+# %% vscode={"languageId": "python"}
 # expand df_2_concat to one row per ECG session inside each file
 # split points are inferred from t resets (non-increasing t)
 if "df_2_concat" not in globals() or df_2_concat.empty:
@@ -1021,7 +1021,7 @@ df_2_sessions_before_dedup.head()
 # %% [markdown]
 # use hash(v) to deduplicate sessions
 
-# %%
+# %% vscode={"languageId": "python"}
 def hash_v_array(v):
     arr = np.asarray(v, dtype=np.float32)
     arr = np.ascontiguousarray(arr)
@@ -1045,7 +1045,7 @@ print(f"Unique hashes: {df_2_sessions_before_dedup['v_hash'].nunique()}")
 
 df_2_sessions_before_dedup.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 # check cross-id hash collisions and deduplicate by v_hash
 # keep earliest timestamp_start when duplicates/collisions occur
 if "df_2_sessions_before_dedup" not in globals() or df_2_sessions_before_dedup.empty:
@@ -1092,7 +1092,7 @@ print("Cross-ID collision hashes:", post_cross_id.shape[0])
 # df_2_sessions[["id", "timestamp_start", "session_counter", "n_samples", "v_hash"]].head()
 df_2_sessions.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 # quick check of session_counter rule against ORIGINAL file size from df_2_concat
 # <=9000 in original file -> only counter 0
 # >9000 in original file -> counters start at 1
@@ -1122,17 +1122,17 @@ print("Large-file rule violations:", len(violations_large))
 
 violations_large
 
-# %%
+# %% vscode={"languageId": "python"}
 df_2_sessions.head()
 
 # %% [markdown]
 # #### Inspecting data coverage after 30/09/2025: plot sanity checks
 
-# %%
+# %% vscode={"languageId": "python"}
 # import ema data to extract information about active assessment phases
 ema_content = pd.read_pickle(ema_path)
 
-# %%
+# %% vscode={"languageId": "python"}
 # sanity check plots: inspecting data coverage to give feedback to thrive
 
 import pandas as pd
@@ -1303,7 +1303,7 @@ fig2.show()
 # %% [markdown]
 # #### DELETE LATER [START]
 
-# %%
+# %% vscode={"languageId": "python"}
 # ECG sessions per participant per burst
 ecg_sessions_per_burst = (
     df_ecg_active
@@ -1322,7 +1322,7 @@ ecg_sessions_per_burst["Total"] = ecg_sessions_per_burst.sum(axis=1)
 
 display(ecg_sessions_per_burst)
 
-# %%
+# %% vscode={"languageId": "python"}
 # Keep only one row per participant per day per burst
 participant_day = (
     df_ecg_active
@@ -1339,7 +1339,7 @@ coverage = (
 
 coverage.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 fig = px.line(
     coverage,
     x="burst_day",
@@ -1359,7 +1359,7 @@ fig.show()
 # %% [markdown]
 # DELETE LATER [KEEP GOING, END IS FURTHER]
 
-# %%
+# %% vscode={"languageId": "python"}
 # Plot the number of ECG sessions and active EMA phases per day
 import os
 import numpy as np
@@ -1522,22 +1522,22 @@ else:
 #
 # `csv_filepath` is only deefined for csv data (from which file the session was extracted)
 
-# %%
+# %% vscode={"languageId": "python"}
 df_1_sessions.rename(columns={"session_id": "string_session_id"}, inplace=True)
 df_1_sessions
 
-# %%
+# %% vscode={"languageId": "python"}
 df_2_sessions.rename(columns={"session_counter": "csv_session_counter", "filepath": "csv_filepath"}, inplace=True)
 df_2_sessions
 
-# %%
+# %% vscode={"languageId": "python"}
 df_2_sessions
 # TODO timezones in df_2, assume utc for now
 df_2_sessions["timestamp_start"] = df_2_sessions["timestamp_start"].dt.tz_localize(
     "UTC"
 )
 
-# %%
+# %% vscode={"languageId": "python"}
 df_all_ecg = (
     pd.concat([df_1_sessions, df_2_sessions], ignore_index=True)
     .sort_values(["id", "timestamp_start"])
@@ -1549,7 +1549,7 @@ df_all_ecg.head()
 # %% [markdown]
 # ### check if there are duplications from 1 to 2 
 
-# %%
+# %% vscode={"languageId": "python"}
 # DONE check if there are duplications from 1 to 2
 
 # DONE map ECGs to the unique beep identifier
@@ -1558,13 +1558,13 @@ df_all_ecg.head()
 # might not be a matching id
 # match them based on the timestamp_start & id
 
-# %%
+# %% vscode={"languageId": "python"}
 df_all_ecg["v_hash"] = df_all_ecg["v"].apply(hash_v_array)
 assert df_all_ecg["v_hash"].nunique() == len(df_all_ecg)
 print("All ECG sessions have unique v arrays based on hash check.")
 
 
-# %%
+# %% vscode={"languageId": "python"}
 df_all_ecg.drop(columns=["v_hash", "modality"], inplace=True) 
 
 # %% [markdown]
@@ -1574,7 +1574,7 @@ df_all_ecg.drop(columns=["v_hash", "modality"], inplace=True)
 # might not be a matching id\
 # match them based on the timestamp_start & id
 
-# %%
+# %% vscode={"languageId": "python"}
 # df_ema_content = pd.read_parquet(preprocessed_path / "ema_content.pkl")
 with open(preprocessed_path / "ema_content.pkl", "rb") as f:
     df_ema_content = pickle.load(f)
@@ -1582,14 +1582,14 @@ with open(preprocessed_path / "ema_content.pkl", "rb") as f:
 print(f"EMA content rows: {len(df_ema_content):_}")
 df_ema_content.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 print(len(df_all_ecg))
 df_all_ecg.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 df_ema_content.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 # Prepare EMA data for merge_asof
 # Select only necessary columns
 ema_subset = df_ema_content[
@@ -1639,7 +1639,7 @@ print(f"Rows without EMA match: {df_all_ecg['beep_per_person_id'].isna().sum()}"
 print(f"\nTime difference statistics (seconds):")
 print(df_all_ecg["time_diff_to_ema_seconds"].describe())
 
-# %%
+# %% vscode={"languageId": "python"}
 # Plot histogram and mark the peak
 vals = df_all_ecg["time_diff_to_ema_seconds"].dropna().values
 bins = np.arange(0, 300, 1)
@@ -1670,7 +1670,7 @@ plt.annotate(
 )
 plt.tight_layout()
 
-# %%
+# %% vscode={"languageId": "python"}
 df_monitoring = pd.read_csv(
     "https://docs.google.com/spreadsheets/d/1z8LZJBBMzzAmiXIS47X8SLk-zSMwDIXSKPit4IlmfuE/export?format=csv"
 )
@@ -1694,10 +1694,10 @@ df_monitoring.rename(
 monitoring_subset = df_monitoring[["id", "for_id", "ema_id"]].copy()
 monitoring_subset["id"] = monitoring_subset["id"].str[:4]
 
-# %%
+# %% vscode={"languageId": "python"}
 monitoring_subset["id"].value_counts()
 
-# %%
+# %% vscode={"languageId": "python"}
 # TODO decide about hte OmAV duplication
 monitoring_subset
 df_all_ecg = df_all_ecg.merge(
@@ -1707,10 +1707,10 @@ df_all_ecg = df_all_ecg.merge(
     # validate="many_to_one", # OmAV appears twice
 )
 
-# %%
+# %% vscode={"languageId": "python"}
 df_all_ecg.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 # save to parquet
 df_all_ecg.to_parquet(raw_path / "df_all_ecg_start--20250930.parquet", index=False)
 
@@ -1732,7 +1732,7 @@ df_all_ecg.to_parquet(raw_path / "df_all_ecg_start--20250930.parquet", index=Fal
 #
 # * Memo: I removed all visual plots to keep the preproc as clean and short as possible. we can re-add them later after fixing the import section
 
-# %%
+# %% vscode={"languageId": "python"}
 # Parallel execution
 
 # for testing, use only the first 2500 ECG sessions
@@ -1839,7 +1839,7 @@ if times:
 print("Failed sessions:", df["error"].notna().sum())
 df.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 # Merge preprocessing output into full ECG session table using existing row index.
 if "df" not in globals() or df.empty:
     raise RuntimeError("df is missing or empty. Run preprocessing cell first.")
@@ -1848,12 +1848,12 @@ df_all_ecg_processed = df_all_ecg.join(df, how="left")
 
 df_all_ecg_processed.head()
 
-# %%
+# %% vscode={"languageId": "python"}
 # if there should be more ecg files, change to the ecg folder, otherwise keep the current
 # df_all_ecg_processed.to_parquet(preprocessed_path / "ecg" / "ecg_processed.parquet", index=False)
 df_all_ecg_processed.to_parquet(preprocessed_path / "ecg_processed.parquet", index=False)
 
-# %%
+# %% vscode={"languageId": "python"}
 df_all_ecg_processed[df_all_ecg_processed["error"].notna()]
 
 # %% [markdown]
@@ -1870,7 +1870,7 @@ df_all_ecg_processed[df_all_ecg_processed["error"].notna()]
 # | > 120 ms         | very high (often athletes)     | 
 #
 
-# %%
+# %% vscode={"languageId": "python"}
 import plotly.express as px
 
 rmssd = df["HRV_RMSSD"].dropna()
@@ -1925,14 +1925,14 @@ fig.show()
 #
 # Thus: 5 - 200 ms as acceptable range is quite a liberal choice with still 20.5% data loss in 2500 ecg sessions
 
-# %%
+# %% vscode={"languageId": "python"}
 low_outliers = (rmssd < 5).sum()
 high_outliers = (rmssd > 200).sum()
 
 print(f"Low (<5): {low_outliers}")
 print(f"High (>=200): {high_outliers}")
 
-# %%
+# %% vscode={"languageId": "python"}
 # show all metrics (we can infer more from NeuroKit but I reduced it for know)
 df.head(50)
 
@@ -1942,11 +1942,11 @@ df.head(50)
 # every single file should only contain 9000 data points
 df
 
-# %%
+# %% vscode={"languageId": "python"}
 # note:
 # removed all single case visualizations of preprocessing steps (raw, clean, peak detection etc.) to make the notebook as clean as possible for know
 # (can add them later again if you want)
 
 
 
-# %%
+# %% vscode={"languageId": "python"}
