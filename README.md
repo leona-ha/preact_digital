@@ -38,13 +38,15 @@ The project codebase is organized as follows:
 │   │   ├── infer_timeoffset.py
 │   │   ├── missing_data.py
 │   │   └── redcap_features.py
-│   └── scripts/             # Python executable scripts
-│       ├── 00_temp_gps_minivalid.py
-│       ├── 01_Data_Preprocess.py
-│       ├── 02_Aggregate_All_Passive.py
-│       ├── 02gps_Aggregate_GPS.py
-│       ├── 06_ECG_Preprocess.py
-│       └── create_backup.py
+│   ├── scripts/             # Python executable scripts
+│   │   ├── 00_temp_gps_minivalid.py
+│   │   ├── 01_Data_Preprocess.py
+│   │   ├── 02_Aggregate_All_Passive.py
+│   │   ├── 02gps_Aggregate_GPS.py
+│   │   ├── 06_ECG_Preprocess.py
+│   │   └── create_backup.py
+│   └── utils/               # Utility scripts and helper tools
+│       └── get_active_ema_customers_past_20250930.py # Retrieve active EMA customer cohort dates past 2025-09-30
 └── server_config.py         # Root server configuration (paths, partitions, environment variables)
 ```
 
