@@ -19,8 +19,11 @@
 
 # %%
 # %%
-import os
+from pyprojroot import here
 import sys
+sys.path.insert(0, str(here()))
+
+import os
 from functools import reduce
 from pathlib import Path
 import logging
@@ -32,20 +35,10 @@ import matplotlib.pyplot as plt
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
-
-# If your current working directory is the notebooks directory, use this:
-notebook_dir = os.getcwd()  # current working directory
-src_path = os.path.abspath(os.path.join(notebook_dir, "..", "src"))
-sys.path.append(src_path)
-
-
-# Add the parent directory to sys.path
-parent_dir = os.path.abspath(os.path.join(notebook_dir, ".."))
-sys.path.append(parent_dir)
 import pickle
 from server_config import base_path
 
-from functions.preprocessing.aggregation import (
+from src.preprocessing.aggregation import (
     aggregate_sleep_daily,
     aggregate_hr_daily,
     aggregate_steps_daily,
@@ -63,7 +56,7 @@ df_backup = pd.read_feather(backup_path)
 print(f"Loaded backup data shape: {df_backup.shape}")
 
 # %%
-debug = True  # Set to True for fast debug runs, False for full dataset runs
+debug = False  # Set to True for fast debug runs, False for full dataset runs
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON!!!!!!!!!!!!!")
     # Take a small subset of participants for fast debugging
@@ -218,7 +211,7 @@ print(f"Date range: {df_daily['local_day'].min()} to {df_daily['local_day'].max(
 # # save the aggregated daily data
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON: Saving locally inside the repository!!!!!!!!!!!!!")
-    output_dir = Path(__file__).resolve().parent if "__file__" in locals() else Path.cwd()
+    output_dir = here() / "tmp"
     output_path = output_dir / "daily_aggregated_all_passive_debug.feather"
 else:
     passive_daily_dir = base_path / "preprocessed" / "passive" / "daily"

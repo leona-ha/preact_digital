@@ -19,8 +19,11 @@
 
 # %%
 # %%
-import os
+from pyprojroot import here
 import sys
+sys.path.insert(0, str(here()))
+
+import os
 from pathlib import Path
 import logging
 import pandas as pd
@@ -31,20 +34,10 @@ import matplotlib.pyplot as plt
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
-
-# If your current working directory is the notebooks directory, use this:
-notebook_dir = os.getcwd()  # current working directory
-src_path = os.path.abspath(os.path.join(notebook_dir, "..", "src"))
-sys.path.append(src_path)
-
-
-# Add the parent directory to sys.path
-parent_dir = os.path.abspath(os.path.join(notebook_dir, ".."))
-sys.path.append(parent_dir)
 import pickle
 from server_config import base_path
 
-from functions.preprocessing import gps_features
+from src.preprocessing import gps_features
 
 # %% [markdown]
 # ## Load Data
@@ -277,7 +270,7 @@ assert not np.any(
 # save the aggregated daily data
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON: Saving locally inside the repository!!!!!!!!!!!!!")
-    output_dir = Path(__file__).resolve().parent if "__file__" in locals() else Path.cwd()
+    output_dir = here() / "tmp"
     output_path = output_dir / "temp_gps_daily_metrics_debug.feather"
 else:
     passive_daily_dir = base_path / "preprocessed" / "passive" / "daily"

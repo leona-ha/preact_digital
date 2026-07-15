@@ -71,6 +71,7 @@ tmp
 # ====================
 **/.ipynb_checkpoints/
 *.nbconvert.ipynb
+src/scripts/*.ipynb
 
 # ====================
 # Virtual environments
@@ -303,6 +304,7 @@ ipython_config.py
 *.local
 *.swp
 *.swo
+logs
 
 # ====================
 # Data files to ignore

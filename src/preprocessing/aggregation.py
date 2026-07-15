@@ -3,6 +3,10 @@ import numpy as np
 
 import logging
 
+# Fixed local hours for heart rate nighttime features
+HR_NIGHT_START_HOUR = 20
+HR_NIGHT_END_HOUR = 6
+
 
 # Complete sleep session aggregation - starts from df, produces df_sleep_sessions
 # FULLY VECTORIZED - no loops!
@@ -28,6 +32,17 @@ def compute_sleep_sessions(
             ]
         )
     ]
+    if df.empty:
+        return pd.DataFrame(columns=[
+            "id", "sleep_session_id", "timestamp_start", "timestamp_end",
+            "local_timestamp_start", "local_timestamp_end", "sleep_session_duration",
+            "SleepInBed_duration", "SleepAwake_duration", "SleepLight_duration",
+            "SleepDeep_duration", "total_sleep_time", "awakenings", "long_awakenings",
+            "sleep_onset", "sleep_offset", "sleep_onset_hour", "sleep_offset_hour",
+            "time_in_bed", "time_out_of_bed", "sleep_efficiency", "hypersomnia",
+            "insomnia", "awake_pct", "light_sleep_pct", "deep_sleep_pct",
+            "day", "num_sessions_in_day"
+        ])
     df = df.sort_values(by=["id", "timestamp_start"]).reset_index(drop=True)
     df["duration"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
 
@@ -387,7 +402,7 @@ MAP_ACTIVITYTYPEDETAIL2 = {
 }
 
 
-def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
+def aggregate_sleep_daily(df_backup, max_gap_seconds=5400, df_sessions=None):
     """
     Aggregate sleep data to daily level.
 
@@ -441,7 +456,8 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
     """
     # Compute sleep sessions using existing function
     # ! the bottleneck is here, if to optimize, optimize compute_sleep_sessions
-    df_sessions = compute_sleep_sessions(df_backup, max_gap_seconds=max_gap_seconds)
+    if df_sessions is None:
+        df_sessions = compute_sleep_sessions(df_backup, max_gap_seconds=max_gap_seconds)
 
     # Convert day to datetime for consistency
     df_sessions["local_day"] = pd.to_datetime(df_sessions["day"])
@@ -506,7 +522,7 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400):
 
 
 # TODO HR zones - change the algorithm
-def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=False):
+def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=False, df_sleep_sessions=None):
     """
     Aggregate heart rate data to daily level.
 
@@ -518,6 +534,8 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         (resting_upper, vigorous_lower) thresholds for HR zones
     include_zero_hours : bool
         Whether to include hours with zero records when computing per-hour stats
+    df_sleep_sessions : pd.DataFrame, optional
+        Precomputed sleep sessions dataframe containing sleep onset/offset columns. If None, it will be computed automatically.
 
     Returns
     -------
@@ -549,6 +567,12 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     | **`HR_seconds_per_hour_median`** | Median of 1-second HR records per hour (calculated **only over hours with data**) | Calculated on 1-second expanded data |
     | **`HR_seconds_per_hour_std`** | Standard deviation of 1-second HR records per hour (calculated **only over hours with data**) | Calculated on 1-second expanded data |
     | **`HR_coverage`** | Percentage of the day covered by HR recordings (`HR_raw_hours_with_records / 24`) | Derived from raw coverage stats |
+    | **`HR_night_mean`** | Average heart rate during nighttime hours (`hour >= HR_NIGHT_START_HOUR` or `hour <= HR_NIGHT_END_HOUR`) | Calculated on 1-second expanded data |
+    | **`HR_night_std`** | Standard deviation of heart rate during nighttime hours | Calculated on 1-second expanded data |
+    | **`HR_night_count`** | Number of 1-second HR records during nighttime hours | Calculated on 1-second expanded data |
+    | **`HR_sleep_mean`** | Average heart rate during sleep sessions | Calculated on 1-second expanded data |
+    | **`HR_sleep_std`** | Standard deviation of heart rate during sleep sessions | Calculated on 1-second expanded data |
+    | **`HR_sleep_count`** | Number of 1-second HR records during sleep sessions | Calculated on 1-second expanded data |
     """
     resting_threshold, vigorous_threshold = zone_thresholds
 
@@ -626,6 +650,70 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     # Add local day
     df_avg["local_day"] = df_avg["local_timestamp"].dt.floor("D")
     df_avg["local_hour"] = df_avg["local_timestamp"].dt.floor("h")
+
+    # Nighttime HR: fixed local hours: (hour >= HR_NIGHT_START_HOUR) | (hour <= HR_NIGHT_END_HOUR)
+    df_avg["is_night"] = (df_avg["local_timestamp"].dt.hour >= HR_NIGHT_START_HOUR) | (df_avg["local_timestamp"].dt.hour <= HR_NIGHT_END_HOUR)
+    
+    df_hr_night = (
+        df_avg[df_avg["is_night"]]
+        .groupby(["id", "local_day"], observed=True)
+        .agg(
+            HR_night_mean=("HeartRate", "mean"),
+            HR_night_std=("HeartRate", "std"),
+            HR_night_count=("HeartRate", "count"),
+        )
+        .reset_index()
+    )
+
+    # Sleep HR: use sleep onset and offset from sleep sessions
+    if df_sleep_sessions is None:
+        try:
+            df_sleep_sessions = compute_sleep_sessions(df_backup)
+        except Exception:
+            df_sleep_sessions = None
+
+    if df_sleep_sessions is not None and not df_sleep_sessions.empty:
+        df_sleep_sessions_for_merge = df_sleep_sessions[
+            ["id", "sleep_onset", "sleep_offset", "day"]
+        ].dropna(subset=["sleep_onset", "sleep_offset"]).copy()
+        
+        if not df_sleep_sessions_for_merge.empty:
+            df_sleep_sessions_for_merge["local_day_sleep"] = pd.to_datetime(df_sleep_sessions_for_merge["day"])
+            df_sleep_sessions_for_merge = df_sleep_sessions_for_merge.sort_values("sleep_onset")
+            
+            df_avg_sorted = df_avg.sort_values("local_timestamp")
+            
+            df_merged = pd.merge_asof(
+                df_avg_sorted,
+                df_sleep_sessions_for_merge,
+                left_on="local_timestamp",
+                right_on="sleep_onset",
+                by="id",
+                direction="backward",
+            )
+            
+            is_sleep = (df_merged["local_timestamp"] >= df_merged["sleep_onset"]) & (
+                df_merged["local_timestamp"] <= df_merged["sleep_offset"]
+            )
+            df_sleep_hr = df_merged[is_sleep]
+            
+            if not df_sleep_hr.empty:
+                df_hr_sleep = (
+                    df_sleep_hr.groupby(["id", "local_day_sleep"], observed=True)
+                    .agg(
+                        HR_sleep_mean=("HeartRate", "mean"),
+                        HR_sleep_std=("HeartRate", "std"),
+                        HR_sleep_count=("HeartRate", "count"),
+                    )
+                    .reset_index()
+                    .rename(columns={"local_day_sleep": "local_day"})
+                )
+            else:
+                df_hr_sleep = pd.DataFrame(columns=["id", "local_day", "HR_sleep_mean", "HR_sleep_std", "HR_sleep_count"])
+        else:
+            df_hr_sleep = pd.DataFrame(columns=["id", "local_day", "HR_sleep_mean", "HR_sleep_std", "HR_sleep_count"])
+    else:
+        df_hr_sleep = pd.DataFrame(columns=["id", "local_day", "HR_sleep_mean", "HR_sleep_std", "HR_sleep_count"])
 
     # Second-level hourly coverage (post-expansion)
     df_hr_seconds_hourly = (
@@ -765,6 +853,14 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
 
     # coverage as the number of hours with records divided by 24
     df_hr_daily["HR_coverage"] = df_hr_daily["HR_raw_hours_with_records"] / 24
+
+    # Merge nighttime HR stats
+    df_hr_daily = df_hr_daily.merge(df_hr_night, on=["id", "local_day"], how="left")
+    df_hr_daily["HR_night_count"] = df_hr_daily["HR_night_count"].fillna(0).astype(int)
+
+    # Merge sleep HR stats
+    df_hr_daily = df_hr_daily.merge(df_hr_sleep, on=["id", "local_day"], how="left")
+    df_hr_daily["HR_sleep_count"] = df_hr_daily["HR_sleep_count"].fillna(0).astype(int)
 
     return df_hr_daily
 
@@ -1185,13 +1281,21 @@ def aggregate_all_passive(df_backup, **kwargs):
         Merged daily aggregates from all modalities on ["id", "local_day"]
     """
     logging.info("Aggregating sleep data...")
-    df_sleep = aggregate_sleep_daily(
+    # Compute sleep sessions once to avoid redundant compute in both sleep and HR
+    df_sleep_sessions = compute_sleep_sessions(
         df_backup, max_gap_seconds=kwargs.get("sleep_max_gap_seconds", 5400)
+    )
+    df_sleep = aggregate_sleep_daily(
+        df_backup,
+        max_gap_seconds=kwargs.get("sleep_max_gap_seconds", 5400),
+        df_sessions=df_sleep_sessions,
     )
 
     logging.info("Aggregating heart rate data...")
     df_hr = aggregate_hr_daily(
-        df_backup, zone_thresholds=kwargs.get("hr_zone_thresholds", (60, 100))
+        df_backup,
+        zone_thresholds=kwargs.get("hr_zone_thresholds", (60, 100)),
+        df_sleep_sessions=df_sleep_sessions,
     )
 
     logging.info("Aggregating steps data...")

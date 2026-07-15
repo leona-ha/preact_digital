@@ -17,11 +17,11 @@
 import matplotlib.pyplot as plt
 
 # %%
-from pyprojroot import (
-    here,
-)  # define relative paths to the project root (working directory)
-from pathlib import Path
+from pyprojroot import here
 import sys
+sys.path.insert(0, str(here()))
+
+from pathlib import Path
 from datetime import date
 import pandas as pd
 import gc
@@ -33,19 +33,12 @@ import plotly.express as px
 
 # --- Paths / imports -------------------------------------------------
 
-# relative project root
-PROJECT_ROOT = (
-    here()
-)  # '.here' is located as invisible file in the project root working directory
-PREPROCESSING_DIR = PROJECT_ROOT / "functions" / "preprocessing"
-for p in (PROJECT_ROOT, PREPROCESSING_DIR):
-    if str(p) not in sys.path:
-        sys.path.append(str(p))
+PROJECT_ROOT = here()
 
 from server_config import base_path
 raw_path = base_path / "raw"
 
-from functions.preprocessing.infer_timeoffset import (
+from src.preprocessing.infer_timeoffset import (
     create_utcday_tzoffset_df,
     merge_fill_tz,
 )
