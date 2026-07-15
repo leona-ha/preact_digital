@@ -116,12 +116,12 @@
 # ---
 
 # %%
-from pyprojroot import (
-    here,
-)  # define relative paths to the project root (working directory)
+from pyprojroot import here
+import sys
+sys.path.insert(0, str(here()))
+
 from pathlib import Path
 from collections import defaultdict
-import sys
 from datetime import date
 import gc
 import os
@@ -145,15 +145,8 @@ from tqdm import tqdm
 #  Define paths
 # ------------------------------------
 
-# .here is located as invisible file in the project root working directory
 PROJECT_ROOT = here()
 
-# add project root to sys.path
-sys.path.append(str(here()))
-
-# import local paths from env.py
-# TODO change it
-# from env import raw_path, ecg_path, backup_path, preprocessed_path
 from server_config import proj_sheet, base_path
 raw_path = base_path / "raw"
 ecg_path = raw_path / "ecg"

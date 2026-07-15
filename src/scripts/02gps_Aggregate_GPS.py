@@ -19,8 +19,11 @@
 
 # %%
 # %%
-import os
+from pyprojroot import here
 import sys
+sys.path.insert(0, str(here()))
+
+import os
 from pathlib import Path
 import logging
 import pandas as pd
@@ -31,11 +34,6 @@ import matplotlib.pyplot as plt
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
-
-# Add the project root to sys.path to find server_config and src modules
-script_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
-project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
-sys.path.append(project_root)
 import pickle
 from server_config import base_path
 

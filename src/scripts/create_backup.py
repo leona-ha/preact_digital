@@ -31,15 +31,8 @@ import pyarrow.parquet as pq
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-# ---------------------------------------------------------------------
-# Pfade wie im Notebook
-# ---------------------------------------------------------------------
-
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SRC_DIR = os.path.join(BASE_DIR, "src")
-for p in (BASE_DIR, SRC_DIR):
-    if p not in sys.path:
-        sys.path.append(p)
+from pyprojroot import here
+sys.path.insert(0, str(here()))
 
 from server_config import backup_path, preprocessed_path, raw_path  # noqa: E402
 

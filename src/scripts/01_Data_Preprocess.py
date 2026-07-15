@@ -19,9 +19,11 @@
 # This script concatenates most recent passive data with backup data and performs basic preprocessing on passive, EMA and Monitoring data.
 
 # %%
-from pyprojroot import here # define relative paths to the project root (working directory)
-from pathlib import Path
+from pyprojroot import here
 import sys
+sys.path.insert(0, str(here()))
+
+from pathlib import Path
 from datetime import date
 import pandas as pd
 import gc  
@@ -33,12 +35,7 @@ import plotly.express as px
 
 # --- Paths / imports -------------------------------------------------
 
-# relative project root
-PROJECT_ROOT = here() # '.here' is located as invisible file in the project root working directory
-PREPROCESSING_DIR = PROJECT_ROOT / "src" / "preprocessing"
-for p in (PROJECT_ROOT, PREPROCESSING_DIR):
-    if str(p) not in sys.path:
-        sys.path.append(str(p))
+PROJECT_ROOT = here()
 
 from server_config import base_path, proj_sheet
 raw_path = str(base_path / "raw")
