@@ -35,7 +35,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 # Pfade wie im Notebook
 # ---------------------------------------------------------------------
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SRC_DIR = os.path.join(BASE_DIR, "src")
 for p in (BASE_DIR, SRC_DIR):
     if p not in sys.path:

@@ -32,19 +32,14 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# If your current working directory is the notebooks directory, use this:
-notebook_dir = os.getcwd()  # current working directory
-src_path = os.path.abspath(os.path.join(notebook_dir, "..", "src"))
-sys.path.append(src_path)
-
-
-# Add the parent directory to sys.path
-parent_dir = os.path.abspath(os.path.join(notebook_dir, ".."))
-sys.path.append(parent_dir)
+# Add the project root to sys.path to find server_config and src modules
+script_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
+project_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+sys.path.append(project_root)
 import pickle
 from server_config import base_path
 
-from functions.preprocessing import gps_features
+from src.preprocessing import gps_features
 
 # %% [markdown]
 # ## Load Data

@@ -37,7 +37,7 @@ import plotly.express as px
 PROJECT_ROOT = (
     here()
 )  # '.here' is located as invisible file in the project root working directory
-PREPROCESSING_DIR = PROJECT_ROOT / "functions" / "preprocessing"
+PREPROCESSING_DIR = PROJECT_ROOT / "src" / "preprocessing"
 for p in (PROJECT_ROOT, PREPROCESSING_DIR):
     if str(p) not in sys.path:
         sys.path.append(str(p))
@@ -45,7 +45,7 @@ for p in (PROJECT_ROOT, PREPROCESSING_DIR):
 from server_config import base_path
 raw_path = base_path / "raw"
 
-from functions.preprocessing.infer_timeoffset import (
+from src.preprocessing.infer_timeoffset import (
     create_utcday_tzoffset_df,
     merge_fill_tz,
 )
