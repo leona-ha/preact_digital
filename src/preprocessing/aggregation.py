@@ -194,13 +194,6 @@ def compute_sleep_sessions(
         + df_sleep_sessions["sleep_offset"].dt.second / 3600
     )
 
-    # it's more for training thing, so leave it for now
-    # # change the onset hour to be > 24 if before 12 noon
-    # SLEEP_ONSET_PLUS_24_HOUR = 12
-    # df_sleep_sessions["sleep_onset_hour"] = df_sleep_sessions["sleep_onset_hour"].apply(
-    #     lambda x: x + 24 if x < SLEEP_ONSET_PLUS_24_HOUR else x
-    # )
-    # # offset hour is fine as is
 
     # Fill NaN with 0 for numeric columns
     for col in [
@@ -435,8 +428,12 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400, df_sessions=None):
     | **`longest_SleepDeep_duration`** | Deep sleep duration (seconds) in longest sleep session | Sum of `SleepDeepBinary` duration in longest session |
     | **`longest_awakenings`** | Number of awakenings in longest sleep session | Count of gaps >= awakening threshold |
     | **`longest_long_awakenings`** | Number of long awakenings in longest sleep session | Count of gaps >= insomnia-awake threshold |
-    | **`longest_sleep_onset_hour`** | Local sleep onset clock-time (decimal hour) for longest session | Derived from local onset timestamp |
-    | **`longest_sleep_offset_hour`** | Local sleep offset clock-time (decimal hour) for longest session | Derived from local offset timestamp |
+    | **`longest_sleep_onset_hour`** | [USE _cos AND _sin VARIANTS FOR DOWNSTREAM ANALYSIS] Local sleep onset clock-time (decimal hour) for longest session | Derived from local onset timestamp |
+    | **`longest_sleep_onset_hour_cos`** | Cyclical cosine encoding of longest sleep onset hour | `cos(2 * pi * longest_sleep_onset_hour / 24)` |
+    | **`longest_sleep_onset_hour_sin`** | Cyclical sine encoding of longest sleep onset hour | `sin(2 * pi * longest_sleep_onset_hour / 24)` |
+    | **`longest_sleep_offset_hour`** | [USE _cos AND _sin VARIANTS FOR DOWNSTREAM ANALYSIS] Local sleep offset clock-time (decimal hour) for longest session | Derived from local offset timestamp |
+    | **`longest_sleep_offset_hour_cos`** | Cyclical cosine encoding of longest sleep offset hour | `cos(2 * pi * longest_sleep_offset_hour / 24)` |
+    | **`longest_sleep_offset_hour_sin`** | Cyclical sine encoding of longest sleep offset hour | `sin(2 * pi * longest_sleep_offset_hour / 24)` |
     | **`longest_sleep_efficiency`** | Sleep efficiency for longest session | `total_sleep_time / time_in_bed` |
     | **`longest_hypersomnia`** | Hypersomnia flag for longest session | `total_sleep_time >= hypersomnia_threshold` |
     | **`longest_insomnia`** | Insomnia flag for longest session | `total_sleep_time <= insomnia_sleep_threshold` and >=1 long awakening |
@@ -469,6 +466,20 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400, df_sessions=None):
         ].idxmax()
     ].reset_index(drop=True)
 
+    # Compute cyclical encoding for sleep onset and offset hours (period 24h)
+    df_longest["sleep_onset_hour_cos"] = np.cos(
+        2 * np.pi * df_longest["sleep_onset_hour"] / 24.0
+    )
+    df_longest["sleep_onset_hour_sin"] = np.sin(
+        2 * np.pi * df_longest["sleep_onset_hour"] / 24.0
+    )
+    df_longest["sleep_offset_hour_cos"] = np.cos(
+        2 * np.pi * df_longest["sleep_offset_hour"] / 24.0
+    )
+    df_longest["sleep_offset_hour_sin"] = np.sin(
+        2 * np.pi * df_longest["sleep_offset_hour"] / 24.0
+    )
+
     # Select columns for longest session (prefix with "longest_")
     longest_cols = [
         "sleep_session_duration",
@@ -481,7 +492,11 @@ def aggregate_sleep_daily(df_backup, max_gap_seconds=5400, df_sessions=None):
         "awakenings",
         "long_awakenings",
         "sleep_onset_hour",
+        "sleep_onset_hour_cos",
+        "sleep_onset_hour_sin",
         "sleep_offset_hour",
+        "sleep_offset_hour_cos",
+        "sleep_offset_hour_sin",
         "sleep_efficiency",
         "hypersomnia",
         "insomnia",

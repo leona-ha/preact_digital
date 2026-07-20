@@ -89,11 +89,11 @@ type_coverage
 # %%
 
 # %%
-df_backup.groupby("id")["modality"].value_counts()
+# df_backup.groupby("id")["modality"].value_counts()
 
-print(f"Total id-type combinations: {len(df_backup.groupby('id')['modality'].value_counts())}")
-print(f"Unique ids: {df_backup['id'].nunique()}")
-print(f"Unique types: {df_backup['modality'].nunique()}")
+# print(f"Total id-type combinations: {len(df_backup.groupby('id')['modality'].value_counts())}")
+# print(f"Unique ids: {df_backup['id'].nunique()}")
+# print(f"Unique types: {df_backup['modality'].nunique()}")
 
 # %% [markdown]
 # ## Single modality aggregations
