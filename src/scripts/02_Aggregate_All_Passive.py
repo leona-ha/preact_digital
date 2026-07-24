@@ -47,6 +47,8 @@ from src.preprocessing.aggregation import (
     aggregate_floors_daily,
 )
 
+import argparse
+
 # %% [markdown]
 # ## Load Data
 
@@ -56,7 +58,11 @@ df_backup = pd.read_feather(backup_path)
 print(f"Loaded backup data shape: {df_backup.shape}")
 
 # %%
-debug = False  # Set to True for fast debug runs, False for full dataset runs
+parser = argparse.ArgumentParser(description="Aggregate passive sensor data.")
+parser.add_argument("--debug", action="store_true", help="Enable debug mode (subset participants).")
+args, _ = parser.parse_known_args()
+
+debug = args.debug or os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON!!!!!!!!!!!!!")
     # Take a small subset of participants for fast debugging

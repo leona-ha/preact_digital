@@ -19,18 +19,20 @@ echo "=== Started passive aggregation pipeline at $(date '+%Y-%m-%d %H:%M:%S') =
 echo "Node: $SLURM_NODENAME"
 echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 
-# Set environment variable to disable debug mode (run on full dataset)
-export DEBUG=False
+# Activate Conda environment
+CONDA_ENV_NAME=${CONDA_ENV_NAME:-preact}
+eval "$(conda shell.bash hook 2>/dev/null || true)"
+conda activate "$CONDA_ENV_NAME" 2>/dev/null || source activate "$CONDA_ENV_NAME" 2>/dev/null || true
 
 # Run passive data aggregation
 echo ""
 echo "=== 1. Running Passive Data Aggregation (02_Aggregate_All_Passive.py) ==="
-/home/milu10/.conda/envs/tiki13/bin/python src/scripts/02_Aggregate_All_Passive.py --nodebug
+python src/scripts/02_Aggregate_All_Passive.py
 
 # Run GPS data aggregation
 echo ""
 echo "=== 2. Running GPS Data Aggregation (02gps_Aggregate_GPS.py) ==="
-/home/milu10/.conda/envs/tiki13/bin/python src/scripts/02gps_Aggregate_GPS.py --nodebug
+python src/scripts/02gps_Aggregate_GPS.py
 
 echo ""
 echo "=== Finished passive aggregation pipeline at $(date '+%Y-%m-%d %H:%M:%S') ==="
