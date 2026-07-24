@@ -60,7 +60,6 @@ This repository contains the data preprocessing, feature engineering, and machin
 │       └── get_active_ema_customers_past_20250930.py
 ├── logs/                    # SLURM job logs
 ├── server_config.py         # Root server configuration (paths, credentials)
-├── environment_py39.yml     # Conda environment specification (Python 3.9)
 ├── requirements.txt         # pip requirements (auto-generated)
 └── _quarto.yml              # Quarto site configuration
 ```

@@ -1367,7 +1367,7 @@ import pandas as pd
 import plotly.express as px
 
 # 1. Load the metadata containing the EMA start and end dates
-meta_path = "/sc-projects/sc-proj-cc15-preact/SP6/preprocessed/meta/SP6_meta_data.csv"
+meta_path = preprocessed_path / "meta" / "SP6_meta_data.csv"
 if os.path.exists(meta_path):
     df_meta = pd.read_csv(meta_path)
     
