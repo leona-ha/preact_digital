@@ -29,18 +29,12 @@ This repository contains the data preprocessing, feature engineering, and machin
 │   ├── 07_EMA_Network.ipynb
 │   ├── 08_Mplus_timegrid.ipynb
 │   ├── X2_Sample_Overview.ipynb
-│   ├── outcomes_jitai/      # JITAI outcome analysis notebooks
 │   ├── study_procedures/    # Study procedure documentation
 │   └── old_notebooks/       # Deprecated notebooks
 ├── quarto/                  # Quarto documentation site (FOR5187 | PREACT)
 ├── slurm/                   # SLURM job scripts for HPC execution
 │   └── run_aggregation.sbatch
 ├── src/                     # Core source code
-│   ├── model_pipelines/     # ML training and evaluation pipelines
-│   │   ├── ML_config.py
-│   │   ├── ML_pipeline.py
-│   │   ├── custom_models.py
-│   │   └── run_ML_pipeline.py
 │   ├── preprocessing/       # Feature extraction and cleaning modules
 │   │   ├── aggregation.py   # Daily passive feature aggregation (HR, sleep, steps, activity)
 │   │   ├── ema_features.py  # EMA outcome classification (improvement/deterioration)
@@ -93,11 +87,13 @@ And then adjusting the variables inside `.env`:
 # Fallback default: /sc-projects/sc-proj-cc15-preact/SP6
 TIKI_BASE_PATH="/sc-projects/sc-proj-cc15-preact/SP6"
 
+# Directory path for SP1 subproject
+TIKI_SP1_PATH="/sc-projects/sc-proj-cc15-preact/SP1"
+
 # Google Sheets ID for the project metadata sheet
 TIKI_PROJ_SHEET="your_google_sheets_id_here"
 
-# TODO credentials
-# Fallback default: /home/leha18/tiki_code/notebooks/tiki-399609-b68b5ade4dfb.json
+# Credentials path
 TIKI_CREDENTIAL_PATH="/path/to/your/google-credentials.json"
 ```
 
@@ -327,7 +323,10 @@ python src/scripts/02_Aggregate_All_Passive.py   # aggregate daily sensor featur
 python src/scripts/02gps_Aggregate_GPS.py        # aggregate daily GPS features
 python src/scripts/06_ECG_Preprocess.py          # extract ECG/HRV features
 
-# On the HPC cluster, use SLURM:
+# On the HPC cluster, run the full pipeline via SLURM:
+sbatch slurm/run_all_scripts.sbatch
+
+# Or run aggregation steps only:
 sbatch slurm/run_aggregation.sbatch
 ```
 
