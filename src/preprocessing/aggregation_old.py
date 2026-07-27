@@ -1,941 +1,252 @@
+import pandas as pd
+import numpy as np
+
 import logging
 
-import numpy as np
-import pandas as pd
+# Fixed local hours for heart rate nighttime features
+HR_NIGHT_START_HOUR = 20
+HR_NIGHT_END_HOUR = 6
 
 
-def _merge_interval_blocks(
-    df: pd.DataFrame,
-    group_cols: list[str],
-) -> pd.DataFrame:
-    """
-    Merge exact duplicates, nested intervals, overlapping intervals,
-    and directly adjacent intervals within each group.
-
-    Genuine positive gaps remain separate blocks.
-    """
-    output_columns = group_cols + [
-        "_interval_block",
-        "timestamp_start",
-        "timestamp_end",
-        "local_timestamp_start",
-        "local_timestamp_end",
-        "duration",
-    ]
-
-    if df.empty:
-        return pd.DataFrame(columns=output_columns)
-
-    x = df.sort_values(
-        group_cols + ["timestamp_start", "timestamp_end"]
-    ).copy()
-
-    # Latest endpoint reached up to the current row
-    x["_running_end"] = (
-        x.groupby(
-            group_cols,
-            observed=True,
-        )["timestamp_end"]
-        .cummax()
-    )
-
-    # Latest endpoint before the current row
-    x["_previous_running_end"] = (
-        x.groupby(
-            group_cols,
-            observed=True,
-        )["_running_end"]
-        .shift()
-    )
-
-    # A new block begins only if a real positive gap exists.
-    x["_new_block"] = (
-        x["_previous_running_end"].isna()
-        | (
-            x["timestamp_start"]
-            > x["_previous_running_end"]
-        )
-    )
-
-    x["_interval_block"] = (
-        x.groupby(
-            group_cols,
-            observed=True,
-        )["_new_block"]
-        .cumsum()
-        .astype("int64")
-    )
-
-    blocks = (
-        x.groupby(
-            group_cols + ["_interval_block"],
-            observed=True,
-        )
-        .agg(
-            timestamp_start=("timestamp_start", "min"),
-            timestamp_end=("timestamp_end", "max"),
-            local_timestamp_start=("local_timestamp_start", "min"),
-            local_timestamp_end=("local_timestamp_end", "max"),
-        )
-        .reset_index()
-    )
-
-    blocks["duration"] = (
-        blocks["timestamp_end"]
-        - blocks["timestamp_start"]
-    ).dt.total_seconds()
-
-    return blocks[output_columns]
-
-
-def _assign_records_to_sleep_sessions(
-    records: pd.DataFrame,
-    sessions: pd.DataFrame,
-) -> pd.DataFrame:
-    """
-    Assign non-SleepState records to established SleepState sessions.
-
-    Each record is assigned to the most recent session that started before
-    the record ended. Records that do not overlap that session are discarded.
-
-    Assigned records are clipped to the SleepState session boundaries so that
-    an erroneous long record cannot join or inflate multiple sleep sessions.
-    """
-    output_columns = list(records.columns) + ["sleep_session_id"]
-
-    if records.empty or sessions.empty:
-        return pd.DataFrame(columns=output_columns)
-
-    session_lookup = sessions[
-        [
-            "id",
-            "sleep_session_id",
-            "timestamp_start",
-            "timestamp_end",
-        ]
-    ].rename(
-        columns={
-            "timestamp_start": "session_start",
-            "timestamp_end": "session_end",
-        }
-    )
-
-    # Match using record end so that a record beginning slightly before
-    # sleep onset can still be assigned if it overlaps the sleep session.
-    assigned = pd.merge_asof(
-        records.sort_values(
-            ["timestamp_end", "id"]
-        ),
-        session_lookup.sort_values(
-            ["session_start", "id"]
-        ),
-        left_on="timestamp_end",
-        right_on="session_start",
-        by="id",
-        direction="backward",
-        allow_exact_matches=True,
-    )
-
-    # Retain only records with an actual positive overlap.
-    overlaps_session = (
-        assigned["sleep_session_id"].notna()
-        & (
-            assigned["timestamp_start"]
-            < assigned["session_end"]
-        )
-        & (
-            assigned["timestamp_end"]
-            > assigned["session_start"]
-        )
-    )
-
-    assigned = assigned.loc[
-        overlaps_session
-    ].copy()
-
-    if assigned.empty:
-        return pd.DataFrame(columns=output_columns)
-
-    # Clip records that begin before the session.
-    starts_before_session = (
-        assigned["timestamp_start"]
-        < assigned["session_start"]
-    )
-
-    start_shift = (
-        assigned["session_start"]
-        - assigned["timestamp_start"]
-    ).where(
-        starts_before_session,
-        pd.Timedelta(0),
-    )
-
-    assigned["local_timestamp_start"] = (
-        assigned["local_timestamp_start"]
-        + start_shift
-    )
-
-    assigned["timestamp_start"] = (
-        assigned["timestamp_start"]
-        .where(
-            ~starts_before_session,
-            assigned["session_start"],
-        )
-    )
-
-    # Clip records that end after the session.
-    ends_after_session = (
-        assigned["timestamp_end"]
-        > assigned["session_end"]
-    )
-
-    end_shift = (
-        assigned["timestamp_end"]
-        - assigned["session_end"]
-    ).where(
-        ends_after_session,
-        pd.Timedelta(0),
-    )
-
-    assigned["local_timestamp_end"] = (
-        assigned["local_timestamp_end"]
-        - end_shift
-    )
-
-    assigned["timestamp_end"] = (
-        assigned["timestamp_end"]
-        .where(
-            ~ends_after_session,
-            assigned["session_end"],
-        )
-    )
-
-    assigned["duration"] = (
-        assigned["timestamp_end"]
-        - assigned["timestamp_start"]
-    ).dt.total_seconds()
-
-    assigned = assigned.loc[
-        assigned["duration"] > 0
-    ].copy()
-
-    assigned["sleep_session_id"] = (
-        assigned["sleep_session_id"]
-        .astype("int64")
-    )
-
-    assigned = assigned.drop(
-        columns=[
-            "session_start",
-            "session_end",
-        ]
-    )
-
-    return assigned
-
-
+# Complete sleep session aggregation - starts from df, produces df_sleep_sessions
+# FULLY VECTORIZED - no loops!
 def compute_sleep_sessions(
-    df: pd.DataFrame,
-    max_gap_seconds: int = 90 * 60,
-    awakening_threshold: int = 5 * 60,
-    insomnia_sleep_threshold: int = 6 * 60 * 60,
-    insomnia_awake_threshold: int = 30 * 60,
-    hypersomnia_threshold: int = 10 * 60 * 60,
-) -> pd.DataFrame:
-    """
-    Construct and aggregate sleep sessions from Withings sleep intervals.
-
-    Sleep sessions are defined using SleepStateBinary only. Exact duplicates
-    and overlapping intervals are counted once. Gaps between SleepState
-    intervals are preserved and can be counted as awakenings.
-
-    Other sleep modalities are attached only after the sessions have been
-    constructed, so they cannot accidentally connect two separate nights.
-    """
-    output_columns = [
-        "id",
-        "sleep_session_id",
-        "timestamp_start",
-        "timestamp_end",
-        "local_timestamp_start",
-        "local_timestamp_end",
-        "sleep_session_duration",
-        "SleepInBed_duration",
-        "SleepAwake_duration",
-        "SleepLight_duration",
-        "SleepDeep_duration",
-        "total_sleep_time",
-        "awakenings",
-        "long_awakenings",
-        "sleep_onset",
-        "sleep_offset",
-        "sleep_onset_hour",
-        "sleep_offset_hour",
-        "time_in_bed",
-        "time_out_of_bed",
-        "sleep_efficiency",
-        "hypersomnia",
-        "insomnia",
-        "awake_pct",
-        "light_sleep_pct",
-        "deep_sleep_pct",
-        "day",
-        "num_sessions_in_day",
-        "n_sleep_blocks",
-        "max_sleep_block_duration",
-        "qc_tst_gt_12h",
-        "qc_tst_gt_16h",
-        "qc_session_gt_18h",
-        "qc_sleep_block_gt_16h",
-        "valid_sleep_session"
-    ]
-
-    sleep_modalities = [
-        "SleepDeepBinary",
-        "SleepLightBinary",
-        "SleepStateBinary",
-        "SleepInBedBinary",
-        "SleepAwakeBinary",
-    ]
-
-    # ------------------------------------------------------------------
-    # 1. Filter and clean raw records
-    # ------------------------------------------------------------------
-    sleep_df = df.loc[
-        df["modality"].isin(sleep_modalities)
-    ].copy()
-
-    required_timestamp_columns = [
-        "timestamp_start",
-        "timestamp_end",
-        "local_timestamp_start",
-        "local_timestamp_end",
-    ]
-
-    sleep_df = sleep_df.dropna(
-        subset=required_timestamp_columns
-    ).copy()
-
-    sleep_df["duration"] = (
-        sleep_df["timestamp_end"]
-        - sleep_df["timestamp_start"]
-    ).dt.total_seconds()
-
-    # Remove zero-length and reversed intervals.
-    sleep_df = sleep_df.loc[
-        sleep_df["duration"] > 0
-    ].copy()
-
-    # Remove exact duplicate records.
-    n_before_deduplication = len(sleep_df)
-
-    sleep_df = sleep_df.drop_duplicates(
-        subset=[
-            "id",
-            "modality",
-            "timestamp_start",
-            "timestamp_end",
-        ],
-        keep="first",
-    ).copy()
-
-    logging.info(
-        "Removed %d exact duplicate sleep records.",
-        n_before_deduplication - len(sleep_df),
-    )
-
-    if sleep_df.empty:
-        return pd.DataFrame(columns=output_columns)
-
-    sleep_df = sleep_df.sort_values(
-        [
-            "id",
-            "timestamp_start",
-            "timestamp_end",
-        ]
-    ).reset_index(drop=True)
-
-    # ------------------------------------------------------------------
-    # 2. Construct sessions from SleepStateBinary only
-    # ------------------------------------------------------------------
-    sleepstate_raw = sleep_df.loc[
-        sleep_df["modality"].eq(
-            "SleepStateBinary"
+    df,
+    max_gap_seconds=90 * 60,
+    awakening_threshold=5 * 60,
+    insomnia_sleep_threshold=6 * 60 * 60,
+    insomnia_awake_threshold=30 * 60,
+    hypersomnia_threshold=10 * 60 * 60,
+):
+    df = df[
+        df["modality"].isin(
+            [
+                "SleepDeepBinary",
+                "SleepLightBinary",
+                # "SleepREMBinary", # only 10 people got these records
+                # "SnoringBinary", # only 2 people got these records #? maybe relevant for this 2 people?
+                "SleepStateBinary",
+                # "SleepBinary", # is included in SleepStateBinary
+                "SleepInBedBinary",
+                "SleepAwakeBinary",
+            ]
         )
-    ].copy()
+    ]
+    if df.empty:
+        return pd.DataFrame(columns=[
+            "id", "sleep_session_id", "timestamp_start", "timestamp_end",
+            "local_timestamp_start", "local_timestamp_end", "sleep_session_duration",
+            "SleepInBed_duration", "SleepAwake_duration", "SleepLight_duration",
+            "SleepDeep_duration", "total_sleep_time", "awakenings", "long_awakenings",
+            "sleep_onset", "sleep_offset", "sleep_onset_hour", "sleep_offset_hour",
+            "time_in_bed", "time_out_of_bed", "sleep_efficiency", "hypersomnia",
+            "insomnia", "awake_pct", "light_sleep_pct", "deep_sleep_pct",
+            "day", "num_sessions_in_day"
+        ])
+    df = df.sort_values(by=["id", "timestamp_start"]).reset_index(drop=True)
+    df["duration"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
 
-    if sleepstate_raw.empty:
-        logging.warning(
-            "No SleepStateBinary records found."
-        )
-        return pd.DataFrame(columns=output_columns)
+    # MAX_GAP_SECOND = 90 * 60  # 90 minutes as the maximum gap to consider same sleep session
+    # AWAKENING_THRESHOLD = 5 * 60  # 5 minutes
+    # INSOMNIA_SLEEP_THRESHOLD = 6 * 60 * 60  # 6 hours
+    # INSOMNIA_AWAKE_THRESHOLD = 30 * 60  # 30 mins - at least one awakening longer than this
+    # HYPERSOMNIA_THRESHOLD = 10 * 60 * 60  # 10 hours
 
-    # Merge only duplicate/overlapping SleepState intervals.
-    # Genuine gaps remain separate.
-    sleep_blocks = _merge_interval_blocks(
-        sleepstate_raw,
-        group_cols=["id"],
+    # Step 1: Identify sleep sessions from all the records
+    # TODO might as well use only SleepState & SleepAwake records only
+    df_sleepall = (
+        # df[df["modality"] == "SleepInBedBinary"]
+        df.sort_values(by=["id", "timestamp_start"]).reset_index(drop=True)
     )
-
-    sleep_blocks = sleep_blocks.sort_values(
-        [
-            "id",
-            "timestamp_start",
-            "timestamp_end",
-        ]
-    ).reset_index(drop=True)
-
-    # Gap between consecutive non-overlapping sleep blocks.
-    sleep_blocks["_previous_end"] = (
-        sleep_blocks.groupby(
-            "id",
-            observed=True,
-        )["timestamp_end"]
-        .shift()
+    df_sleepall["next_sleep_record_start"] = df_sleepall.groupby("id", observed=True)[
+        "timestamp_start"
+    ].shift(-1)
+    df_sleepall["gap_to_next"] = (
+        df_sleepall["next_sleep_record_start"] - df_sleepall["timestamp_end"]
     )
-
-    sleep_blocks["_gap_from_previous"] = (
-        sleep_blocks["timestamp_start"]
-        - sleep_blocks["_previous_end"]
-    ).dt.total_seconds()
-
-    # A gap greater than max_gap_seconds starts a new session.
-    # Smaller gaps remain interruptions inside the same session.
-    sleep_blocks["_new_session"] = (
-        sleep_blocks["_previous_end"].isna()
-        | (
-            sleep_blocks["_gap_from_previous"]
-            > max_gap_seconds
-        )
+    df_sleepall["is_lastentryinsession"] = (
+        df_sleepall["gap_to_next"].dt.total_seconds() > max_gap_seconds
+    ) | (df_sleepall["gap_to_next"].isna())
+    df_sleepall["is_firstentryinsession"] = (
+        df_sleepall.groupby("id", observed=True)["is_lastentryinsession"]
+        .shift(1)
+        .fillna(True)
     )
+    df_sleepall["sleep_session_id"] = df_sleepall["is_firstentryinsession"].cumsum() - 1
 
-    sleep_blocks["sleep_session_id"] = (
-        sleep_blocks.groupby(
-            "id",
-            observed=True,
-        )["_new_session"]
-        .cumsum()
-        .astype("int64")
-        - 1
-    )
-
-    # ------------------------------------------------------------------
-    # 3. Session boundaries and total sleep time
-    # ------------------------------------------------------------------
+    # Step 2: Create df_sleep_sessions with session boundaries
     df_sleep_sessions = (
-        sleep_blocks.groupby(
-            [
-                "id",
-                "sleep_session_id",
-            ],
-            observed=True,
-        )
+        df_sleepall.groupby(["id", "sleep_session_id"], observed=True)
         .agg(
-            timestamp_start=(
-                "timestamp_start",
-                "min",
-            ),
-            timestamp_end=(
-                "timestamp_end",
-                "max",
-            ),
-            local_timestamp_start=(
-                "local_timestamp_start",
-                "min",
-            ),
-            local_timestamp_end=(
-                "local_timestamp_end",
-                "max",
-            ),
+            {
+                "timestamp_start": "first",
+                "timestamp_end": "last",  # TODO change to max ?
+                "local_timestamp_start": "first",
+                "local_timestamp_end": "last",  #! and here
+            }
         )
         .reset_index()
     )
-
     df_sleep_sessions["sleep_session_duration"] = (
-        df_sleep_sessions["timestamp_end"]
-        - df_sleep_sessions["timestamp_start"]
+        df_sleep_sessions["timestamp_end"] - df_sleep_sessions["timestamp_start"]
     ).dt.total_seconds()
 
-    # TST is the sum of non-overlapping SleepState blocks.
-    # Gaps are therefore not included in TST.
-    total_sleep_time_agg = (
-        sleep_blocks.groupby(
-            [
-                "id",
-                "sleep_session_id",
-            ],
-            observed=True,
-        )["duration"]
+    # Step 3: Assign session IDs to all relevant records via merge + filter
+    # relevant_types = [
+    #     "SleepInBedBinary",
+    #     "SleepAwakeBinary",
+    #     "SleepLightBinary",
+    #     "SleepDeepBinary",
+    #     "SleepStateBinary",
+    # ]
+    # df_relevant = df[df["modality"].isin(relevant_types)].copy()
+
+    # Merge on id only, then filter by time bounds (more memory but no sorting issues)
+    sessions_for_merge = df_sleep_sessions[
+        ["id", "sleep_session_id", "timestamp_start", "timestamp_end"]
+    ].rename(
+        columns={"timestamp_start": "session_start", "timestamp_end": "session_end"}
+    )
+
+    # with merge_asof, both times must be sorted
+    df_with_session = (
+        pd.merge_asof(
+            df.sort_values(by=["timestamp_start", "id"]),
+            sessions_for_merge.sort_values(by=["session_start", "id"]),
+            left_on="timestamp_start",
+            right_on="session_start",
+            by="id",
+            direction="backward",
+        )
+        .sort_values(by=["id", "timestamp_start"])
+        .reset_index(drop=True)
+    )
+
+    # Step 4: Aggregate durations by session and type (vectorized!)
+    duration_agg = (
+        df_with_session.groupby(["id", "sleep_session_id", "modality"], observed=True)[
+            "duration"
+        ]
         .sum()
-        .reset_index(
-            name="total_sleep_time"
-        )
-    )
-    # SleepState block-level quality-control information
-    sleep_block_qc_agg = (
-        sleep_blocks.groupby(
-            [
-                "id",
-                "sleep_session_id",
-            ],
-            observed=True,
-        )
-        .agg(
-            n_sleep_blocks=("duration", "size"),
-            max_sleep_block_duration=("duration", "max"),
-        )
-        .reset_index()
+        .unstack(fill_value=0)
     )
 
-    # ------------------------------------------------------------------
-    # 4. Attach other modalities to the established sessions
-    # ------------------------------------------------------------------
-    other_sleep_records = sleep_df.loc[
-        ~sleep_df["modality"].eq(
-            "SleepStateBinary"
-        )
-    ].copy()
-
-    assigned_other_records = (
-        _assign_records_to_sleep_sessions(
-            records=other_sleep_records,
-            sessions=df_sleep_sessions,
-        )
-    )
-
-    modality_mapping = {
+    # Rename columns
+    col_mapping = {
+        # "SleepInBedBinary": "time_in_bed",
         "SleepInBedBinary": "SleepInBed_duration",
         "SleepAwakeBinary": "SleepAwake_duration",
         "SleepLightBinary": "SleepLight_duration",
         "SleepDeepBinary": "SleepDeep_duration",
+        "SleepStateBinary": "total_sleep_time",
     }
+    duration_agg = duration_agg.rename(columns=col_mapping)
+    # Ensure all columns exist
+    for col in col_mapping.values():
+        if col not in duration_agg.columns:
+            duration_agg[col] = 0
+    duration_agg = duration_agg.reset_index()
 
-    if assigned_other_records.empty:
-        duration_agg = df_sleep_sessions[
-            [
-                "id",
-                "sleep_session_id",
-            ]
-        ].copy()
-
-        for output_col in modality_mapping.values():
-            duration_agg[output_col] = 0.0
-
-    else:
-        modality_blocks = _merge_interval_blocks(
-            assigned_other_records,
-            group_cols=[
-                "id",
-                "sleep_session_id",
-                "modality",
-            ],
-        )
-
-        duration_agg = (
-            modality_blocks.groupby(
-                [
-                    "id",
-                    "sleep_session_id",
-                    "modality",
-                ],
-                observed=True,
-            )["duration"]
-            .sum()
-            .unstack(fill_value=0)
-            .rename(columns=modality_mapping)
-            .reset_index()
-        )
-
-        for output_col in modality_mapping.values():
-            if output_col not in duration_agg.columns:
-                duration_agg[output_col] = 0.0
-
-    # ------------------------------------------------------------------
-    # 5. Calculate time in bed
-    #
-    # Use the union of SleepState and SleepAwake records. Overlap between
-    # these signals is counted only once.
-    # ------------------------------------------------------------------
-    sleepstate_for_in_bed = sleep_blocks[
-        [
-            "id",
-            "sleep_session_id",
-            "timestamp_start",
-            "timestamp_end",
-            "local_timestamp_start",
-            "local_timestamp_end",
-            "duration",
-        ]
-    ].copy()
-
-    awake_for_in_bed = assigned_other_records.loc[
-        assigned_other_records["modality"].eq(
-            "SleepAwakeBinary"
-        ),
-        [
-            "id",
-            "sleep_session_id",
-            "timestamp_start",
-            "timestamp_end",
-            "local_timestamp_start",
-            "local_timestamp_end",
-            "duration",
-        ],
-    ].copy()
-
-    in_bed_records = pd.concat(
-        [
-            sleepstate_for_in_bed,
-            awake_for_in_bed,
-        ],
-        ignore_index=True,
+    # Step 5: Calculate awakenings (vectorized with groupby + shift)
+    sleepstate = (
+        df_with_session[df_with_session["modality"] == "SleepStateBinary"]
+        .sort_values(["id", "sleep_session_id", "timestamp_start"])
+        .copy()
     )
-
-    in_bed_blocks = _merge_interval_blocks(
-        in_bed_records,
-        group_cols=[
-            "id",
-            "sleep_session_id",
-        ],
-    )
-
-    time_in_bed_agg = (
-        in_bed_blocks.groupby(
-            [
-                "id",
-                "sleep_session_id",
-            ],
-            observed=True,
-        )["duration"]
-        .sum()
-        .reset_index(
-            name="time_in_bed"
-        )
-    )
-
-    # ------------------------------------------------------------------
-    # 6. Calculate awakenings from gaps between SleepState blocks
-    # ------------------------------------------------------------------
-    sleep_blocks = sleep_blocks.sort_values(
-        [
-            "id",
-            "sleep_session_id",
-            "timestamp_start",
-        ]
-    ).copy()
-
-    sleep_blocks["next_start"] = (
-        sleep_blocks.groupby(
-            [
-                "id",
-                "sleep_session_id",
-            ],
-            observed=True,
-        )["timestamp_start"]
-        .shift(-1)
-    )
-
-    sleep_blocks["gap_to_next"] = (
-        sleep_blocks["next_start"]
-        - sleep_blocks["timestamp_end"]
+    sleepstate["next_start"] = sleepstate.groupby(
+        ["id", "sleep_session_id"], observed=True
+    )["timestamp_start"].shift(-1)
+    sleepstate["gap_to_next"] = (
+        sleepstate["next_start"] - sleepstate["timestamp_end"]
     ).dt.total_seconds()
-
-    sleep_blocks["is_awakening"] = (
-        sleep_blocks["gap_to_next"]
-        >= awakening_threshold
-    )
-
-    sleep_blocks["is_long_awakening"] = (
-        sleep_blocks["gap_to_next"]
-        >= insomnia_awake_threshold
+    sleepstate["is_awakening"] = sleepstate["gap_to_next"] >= awakening_threshold
+    sleepstate["is_long_awakening"] = (
+        sleepstate["gap_to_next"] >= insomnia_awake_threshold
     )
 
     awakening_agg = (
-        sleep_blocks.groupby(
-            [
-                "id",
-                "sleep_session_id",
-            ],
-            observed=True,
-        )
+        sleepstate.groupby(["id", "sleep_session_id"], observed=True)
         .agg(
-            awakenings=(
-                "is_awakening",
-                "sum",
-            ),
-            long_awakenings=(
-                "is_long_awakening",
-                "sum",
-            ),
-            sleep_onset=(
-                "local_timestamp_start",
-                "min",
-            ),
-            sleep_offset=(
-                "local_timestamp_end",
-                "max",
-            ),
+            awakenings=("is_awakening", "sum"),
+            long_awakenings=("is_long_awakening", "sum"),
+            sleep_onset=("local_timestamp_start", "min"),
+            sleep_offset=("local_timestamp_end", "max"),
         )
         .reset_index()
     )
 
-    # ------------------------------------------------------------------
-    # 7. Merge all session-level features
-    # ------------------------------------------------------------------
+    # Step 6: Merge all aggregations back to df_sleep_sessions
     df_sleep_sessions = df_sleep_sessions.merge(
-        total_sleep_time_agg,
-        on=[
-            "id",
-            "sleep_session_id",
-        ],
-        how="left",
-        validate="one_to_one",
+        duration_agg, on=["id", "sleep_session_id"], how="left"
     )
     df_sleep_sessions = df_sleep_sessions.merge(
-        sleep_block_qc_agg,
-        on=[
-            "id",
-            "sleep_session_id",
-        ],
-        how="left",
-        validate="one_to_one",
-        )   
-
-    df_sleep_sessions = df_sleep_sessions.merge(
-        duration_agg,
-        on=[
-            "id",
-            "sleep_session_id",
-        ],
-        how="left",
-        validate="one_to_one",
+        awakening_agg, on=["id", "sleep_session_id"], how="left"
     )
 
-    df_sleep_sessions = df_sleep_sessions.merge(
-        time_in_bed_agg,
-        on=[
-            "id",
-            "sleep_session_id",
-        ],
-        how="left",
-        validate="one_to_one",
+    df_sleep_sessions["sleep_onset_hour"] = (
+        df_sleep_sessions["sleep_onset"].dt.hour
+        + df_sleep_sessions["sleep_onset"].dt.minute / 60
+        + df_sleep_sessions["sleep_onset"].dt.second / 3600
+    )
+    df_sleep_sessions["sleep_offset_hour"] = (
+        df_sleep_sessions["sleep_offset"].dt.hour
+        + df_sleep_sessions["sleep_offset"].dt.minute / 60
+        + df_sleep_sessions["sleep_offset"].dt.second / 3600
     )
 
-    df_sleep_sessions = df_sleep_sessions.merge(
-        awakening_agg,
-        on=[
-            "id",
-            "sleep_session_id",
-        ],
-        how="left",
-        validate="one_to_one",
-    )
 
-    numeric_fill_columns = [
+    # Fill NaN with 0 for numeric columns
+    for col in [
+        # "time_in_bed",
         "SleepInBed_duration",
         "SleepAwake_duration",
         "SleepLight_duration",
         "SleepDeep_duration",
         "total_sleep_time",
-        "time_in_bed",
         "awakenings",
         "long_awakenings",
-    ]
+    ]:
+        df_sleep_sessions[col] = df_sleep_sessions[col].fillna(0)
 
-    for col in numeric_fill_columns:
-        df_sleep_sessions[col] = (
-            df_sleep_sessions[col]
-            .fillna(0)
-        )
-
-    df_sleep_sessions["awakenings"] = (
-        df_sleep_sessions["awakenings"]
-        .astype("int64")
+    # Step 7: Compute derived metrics
+    #!!!! SleepInBed is wrongly computed for samples from 2023 (==0) as it wasn't recorded
+    # df_sleep_sessions["time_in_bed"] = df_sleep_sessions["SleepInBed_duration"]
+    df_sleep_sessions["time_in_bed"] = (
+        df_sleep_sessions["total_sleep_time"] + df_sleep_sessions["SleepAwake_duration"]
     )
 
-    df_sleep_sessions["long_awakenings"] = (
-        df_sleep_sessions["long_awakenings"]
-        .astype("int64")
-    )
-
-    # ------------------------------------------------------------------
-    # 8. Derived sleep features
-    # ------------------------------------------------------------------
     df_sleep_sessions["time_out_of_bed"] = (
-        df_sleep_sessions["sleep_session_duration"]
-        - df_sleep_sessions["time_in_bed"]
+        df_sleep_sessions["sleep_session_duration"] - df_sleep_sessions["time_in_bed"]
     )
-
-    df_sleep_sessions["sleep_efficiency"] = (
-        df_sleep_sessions["total_sleep_time"]
-        / df_sleep_sessions["time_in_bed"].replace(
-            0,
-            np.nan,
-        )
-    )
-
+    df_sleep_sessions["sleep_efficiency"] = df_sleep_sessions[
+        "total_sleep_time"
+    ] / df_sleep_sessions["time_in_bed"].replace(0, np.nan)
     df_sleep_sessions["hypersomnia"] = (
-        df_sleep_sessions["total_sleep_time"]
-        >= hypersomnia_threshold
+        df_sleep_sessions["total_sleep_time"] >= hypersomnia_threshold
     )
-
     df_sleep_sessions["insomnia"] = (
-        df_sleep_sessions["total_sleep_time"]
-        <= insomnia_sleep_threshold
-    ) & (
-        df_sleep_sessions["long_awakenings"]
-        >= 1
-    )
+        df_sleep_sessions["total_sleep_time"] <= insomnia_sleep_threshold
+    ) & (df_sleep_sessions["long_awakenings"] >= 1)
 
-    df_sleep_sessions["awake_pct"] = (
-        df_sleep_sessions["SleepAwake_duration"]
-        / df_sleep_sessions["time_in_bed"].replace(
-            0,
-            np.nan,
-        )
-    )
+    # !!
+    df_sleep_sessions["awake_pct"] = df_sleep_sessions[
+        "SleepAwake_duration"
+    ] / df_sleep_sessions["time_in_bed"].replace(0, np.nan)
+    df_sleep_sessions["light_sleep_pct"] = df_sleep_sessions[
+        "SleepLight_duration"
+    ] / df_sleep_sessions["time_in_bed"].replace(0, np.nan)
+    df_sleep_sessions["deep_sleep_pct"] = df_sleep_sessions[
+        "SleepDeep_duration"
+    ] / df_sleep_sessions["time_in_bed"].replace(0, np.nan)
 
-    df_sleep_sessions["light_sleep_pct"] = (
-        df_sleep_sessions["SleepLight_duration"]
-        / df_sleep_sessions["time_in_bed"].replace(
-            0,
-            np.nan,
-        )
-    )
+    # Step 8: Additional session-level features
+    # assign the day of the sleep session based on the wake up day (local)
+    df_sleep_sessions["day"] = df_sleep_sessions["local_timestamp_end"].dt.date
+    df_sleep_sessions["num_sessions_in_day"] = df_sleep_sessions.groupby(
+        ["id", "day"], observed=True
+    )["sleep_session_id"].transform("count")
 
-    df_sleep_sessions["deep_sleep_pct"] = (
-        df_sleep_sessions["SleepDeep_duration"]
-        / df_sleep_sessions["time_in_bed"].replace(
-            0,
-            np.nan,
-        )
-    )
-
-    df_sleep_sessions["sleep_onset_hour"] = (
-        df_sleep_sessions["sleep_onset"].dt.hour
-        + (
-            df_sleep_sessions["sleep_onset"].dt.minute
-            / 60
-        )
-        + (
-            df_sleep_sessions["sleep_onset"].dt.second
-            / 3600
-        )
-    )
-
-    df_sleep_sessions["sleep_offset_hour"] = (
-        df_sleep_sessions["sleep_offset"].dt.hour
-        + (
-            df_sleep_sessions["sleep_offset"].dt.minute
-            / 60
-        )
-        + (
-            df_sleep_sessions["sleep_offset"].dt.second
-            / 3600
-        )
-    )
-
-    # Assign each session to its local wake-up day.
-    df_sleep_sessions["day"] = (
-        df_sleep_sessions["sleep_offset"]
-        .fillna(
-            df_sleep_sessions["local_timestamp_end"]
-        )
-        .dt.date
-    )
-
-    df_sleep_sessions["num_sessions_in_day"] = (
-        df_sleep_sessions.groupby(
-            [
-                "id",
-                "day",
-            ],
-            observed=True,
-        )["sleep_session_id"]
-        .transform("count")
-    )
-
-    # ------------------------------------------------------------------
-    # 8.5. Sleep-session quality-control flags
-    # ------------------------------------------------------------------
-    df_sleep_sessions["qc_tst_gt_12h"] = (
-        df_sleep_sessions["total_sleep_time"]
-        > 12 * 60 * 60
-    )
-
-    df_sleep_sessions["qc_tst_gt_16h"] = (
-        df_sleep_sessions["total_sleep_time"]
-        > 16 * 60 * 60
-    )
-
-    df_sleep_sessions["qc_session_gt_18h"] = (
-        df_sleep_sessions["sleep_session_duration"]
-        > 18 * 60 * 60
-    )
-
-    df_sleep_sessions["qc_sleep_block_gt_16h"] = (
-        df_sleep_sessions["max_sleep_block_duration"]
-        > 16 * 60 * 60
-    )
-
-    df_sleep_sessions["valid_sleep_session"] = ~(
-        df_sleep_sessions["qc_tst_gt_16h"]
-        | df_sleep_sessions["qc_session_gt_18h"]
-        | df_sleep_sessions["qc_sleep_block_gt_16h"]
-    )
-
-    # ------------------------------------------------------------------
-    # 9. Temporal consistency checks
-    # ------------------------------------------------------------------
-    tolerance_seconds = 1
-
-    n_tst_invalid = (
-        df_sleep_sessions["total_sleep_time"]
-        > (
-            df_sleep_sessions["sleep_session_duration"]
-            + tolerance_seconds
-        )
-    ).sum()
-
-    n_time_in_bed_invalid = (
-        df_sleep_sessions["time_in_bed"]
-        > (
-            df_sleep_sessions["sleep_session_duration"]
-            + tolerance_seconds
-        )
-    ).sum()
-
-    n_negative_time_out_of_bed = (
-        df_sleep_sessions["time_out_of_bed"]
-        < -tolerance_seconds
-    ).sum()
-
-    n_efficiency_invalid = (
-        df_sleep_sessions["sleep_efficiency"]
-        > 1.001
-    ).sum()
-
-    if (
-        n_tst_invalid
-        or n_time_in_bed_invalid
-        or n_negative_time_out_of_bed
-        or n_efficiency_invalid
-    ):
-        logging.warning(
-            (
-                "Sleep-session consistency violations: "
-                "TST > session=%d, "
-                "time in bed > session=%d, "
-                "negative time out of bed=%d, "
-                "sleep efficiency > 1=%d"
-            ),
-            n_tst_invalid,
-            n_time_in_bed_invalid,
-            n_negative_time_out_of_bed,
-            n_efficiency_invalid,
-        )
-
-    return df_sleep_sessions[output_columns]
+    return df_sleep_sessions
 
 
 MAP_ACTIVITYTYPE = {
@@ -1084,10 +395,7 @@ MAP_ACTIVITYTYPEDETAIL2 = {
 }
 
 
-def aggregate_sleep_daily(df_backup,
-    max_gap_seconds=5400,
-    df_sessions=None,
-    valid_sessions_only=True):
+def aggregate_sleep_daily(df_backup, max_gap_seconds=5400, df_sessions=None):
     """
     Aggregate sleep data to daily level.
 
@@ -1146,50 +454,10 @@ def aggregate_sleep_daily(df_backup,
     # Compute sleep sessions using existing function
     # ! the bottleneck is here, if to optimize, optimize compute_sleep_sessions
     if df_sessions is None:
-        df_sessions = compute_sleep_sessions(
-            df_backup,
-            max_gap_seconds=max_gap_seconds,
-        )
+        df_sessions = compute_sleep_sessions(df_backup, max_gap_seconds=max_gap_seconds)
 
-    # Avoid modifying an externally supplied dataframe
-    df_sessions = df_sessions.copy()
-
-    # Exclude invalid sensor-derived sleep sessions
-    if valid_sessions_only:
-        if "valid_sleep_session" not in df_sessions.columns:
-            raise ValueError(
-                "valid_sessions_only=True, but df_sessions does not contain "
-                "'valid_sleep_session'. Recompute sessions with the updated "
-                "compute_sleep_sessions() function."
-            )
-
-        n_invalid = (
-            ~df_sessions["valid_sleep_session"]
-        ).sum()
-
-        logging.info(
-            "Excluding %d invalid sleep sessions from daily aggregation.",
-            n_invalid,
-        )
-
-        df_sessions = df_sessions.loc[
-            df_sessions["valid_sleep_session"]
-        ].copy()
-
-    # Convert wake-up day to datetime
-    df_sessions["local_day"] = pd.to_datetime(
-        df_sessions["day"]
-    )
-
-    # Recalculate the number of sessions after QC exclusion.
-    # Do not use the count calculated before invalid sessions were removed.
-    df_sessions["num_sessions_in_day"] = (
-        df_sessions.groupby(
-            ["id", "local_day"],
-            observed=True,
-        )["sleep_session_id"]
-        .transform("count")
-    )
+    # Convert day to datetime for consistency
+    df_sessions["local_day"] = pd.to_datetime(df_sessions["day"])
 
     # Get longest session per id-day
     df_longest = df_sessions.loc[
