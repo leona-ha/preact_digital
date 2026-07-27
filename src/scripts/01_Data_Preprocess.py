@@ -38,6 +38,8 @@ import plotly.express as px
 PROJECT_ROOT = here()
 
 from server_config import base_path, proj_sheet
+base_path = Path(base_path)  # convert to Path
+
 raw_path = str(base_path / "raw")
 preprocessed_path = str(base_path / "preprocessed")
 backup_path = str(base_path / "backup")
@@ -51,7 +53,6 @@ today_str = date.today().strftime("%d%m%Y")
 today_day = pd.Timestamp.today().normalize()       
 
 # --- Path -------------------------------------------------------------
-today_str = "29062026"
 datapath = Path(raw_path) / f"export_tiki_{today_str}"  
 
 # %% [markdown]
@@ -194,7 +195,6 @@ df_backup_recent["local_timestamp_end"] = (
     df_backup_recent["timestamp_end"] + df_backup_recent["inferred_tzoffset_timedelta"]
 ).dt.tz_localize(None)
 
-df_backup_recent.head()
 
 # %%
 assert df_backup_recent.inferred_tzoffset.isna().sum() == 0, (
@@ -281,9 +281,6 @@ manual_for_map = {
 }
 
 df_backup_recent["for_id"] = df_backup_recent["for_id"].fillna(df_backup_recent["id"].map(manual_for_map))
-
-# %%
-df_backup_recent.head()
 
 # %%
 # ensure data types are coded correctly
@@ -578,8 +575,6 @@ df_max_day_burst0 = df_max_day.loc[df_max_day["measurement_burst"] == 0]
 df_max_day_burst1 = df_max_day.loc[df_max_day["measurement_burst"] == 1]
 df_max_day_burst2 = df_max_day.loc[df_max_day["measurement_burst"] == 2]
 
-df_max_day_burst1
-
 
 # %% [markdown]
 # CLUSTER PLOTTING TO DECIDE HOW TO PROCEED WITH MAX DAY INDEX > 16
@@ -711,10 +706,6 @@ def plot_ema_clusters(
 
 
 # %%
-# OUT OF PHASE ACTIVATIONS T20 (IDs)
-df_max_day_burst1 
-
-# %%
 # CLUSTER PLOTTING T20
 daily_counts_b1, filtered_b1 = plot_ema_clusters(
     df_ema_content=df_ema_content,
@@ -724,9 +715,6 @@ daily_counts_b1, filtered_b1 = plot_ema_clusters(
     start_col="ema_t20_start"
 )
 
-# %%
-# OUT OF PHASE ACTIVATIONS TPost (IDs)
-df_max_day_burst2
 
 # %%
 # CLUSTER PLOTTING TPost
@@ -980,6 +968,8 @@ df_monitoring.to_csv(df_monitoring_csv_path, index=False)
 # Export df_ema_content as CSV
 df_ema_content_csv_path = ema_save_path + '/ema_content.csv'
 df_ema_content.to_csv(df_ema_content_csv_path, index=False)
+
+print("Exported df_ema_meta, df_monitoring, and df_ema_content as CSV files.")
 
 # Export df_ema_content as CSV to freezed for data check
 #df_ema_content_csv_path = preprocessed_path_freezed +'/code_check' +'/ema_content_recent.csv'
