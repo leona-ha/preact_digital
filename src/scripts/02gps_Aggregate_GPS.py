@@ -43,6 +43,7 @@ from src.preprocessing import gps_features
 # ## Load Data
 
 # %%
+base_path = Path(base_path)
 backup_path = base_path / "raw" / "backup_passive_recent.feather"
 df_backup = pd.read_feather(backup_path)
 print(f"Loaded backup data shape: {df_backup.shape}")

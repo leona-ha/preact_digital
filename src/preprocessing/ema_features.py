@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import cdist
 
+# Fixed local hours for heart rate nighttime features
+HR_NIGHT_START_HOUR = 20
+HR_NIGHT_END_HOUR = 6
 
 def binary_na_outcome(df, emotion_columns):
     """

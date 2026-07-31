@@ -4,6 +4,10 @@ import numpy as np
 import pandas as pd
 
 
+# Fixed local hours for heart rate nighttime features
+HR_NIGHT_START_HOUR = 20
+HR_NIGHT_END_HOUR = 6
+
 def _merge_interval_blocks(
     df: pd.DataFrame,
     group_cols: list[str],
@@ -1398,19 +1402,30 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     df_avg["local_day"] = df_avg["local_timestamp"].dt.floor("D")
     df_avg["local_hour"] = df_avg["local_timestamp"].dt.floor("h")
 
-    # Nighttime HR: fixed local hours: (hour >= HR_NIGHT_START_HOUR) | (hour <= HR_NIGHT_END_HOUR)
-    df_avg["is_night"] = (df_avg["local_timestamp"].dt.hour >= HR_NIGHT_START_HOUR) | (df_avg["local_timestamp"].dt.hour <= HR_NIGHT_END_HOUR)
-    
+    _hour = df_avg["local_timestamp"].dt.hour
+
+    df_avg["night_day"] = np.where(
+        _hour >= HR_NIGHT_START_HOUR,
+        (df_avg["local_timestamp"] + pd.Timedelta(days=1)).dt.floor("D"),
+        df_avg["local_timestamp"].dt.floor("D"),
+    )
+
+    # strict < on the end hour: 20:00-06:00 is a 10-hour window.
+    # `<=` made it 20:00-07:00.
+    df_avg["is_night"] = (_hour >= HR_NIGHT_START_HOUR) | (_hour < HR_NIGHT_END_HOUR)
+
     df_hr_night = (
         df_avg[df_avg["is_night"]]
-        .groupby(["id", "local_day"], observed=True)
+        .groupby(["id", "night_day"], observed=True)
         .agg(
             HR_night_mean=("HeartRate", "mean"),
             HR_night_std=("HeartRate", "std"),
             HR_night_count=("HeartRate", "count"),
         )
         .reset_index()
+        .rename(columns={"night_day": "local_day"})
     )
+
 
     # Sleep HR: use sleep onset and offset from sleep sessions
     if df_sleep_sessions is None:
