@@ -1,13 +1,14 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.19.3
 #   kernelspec:
-#     display_name: tiki13
+#     display_name: TessaPyEnv
 #     language: python
 #     name: python3
 # ---
@@ -49,7 +50,8 @@ from src.preprocessing.infer_timeoffset import (
     merge_fill_tz,
 )
 # --- Dates ------------------------------------------------------------
-today_str = date.today().strftime("%d%m%Y")        
+today_str = "03082026"
+#today_str = date.today().strftime("%d%m%Y")        
 today_day = pd.Timestamp.today().normalize()       
 
 # --- Path -------------------------------------------------------------
@@ -929,6 +931,64 @@ df_ema_content = merge_fill_tz(
 
 df_ema_content.drop(columns=['response_text','item_code_map','beep_type' ,'beep_type_name',
               'element', 'item_order', 'session_id'], inplace=True) 
+
+# %% [markdown]
+# ### 3.5 Rename Affect Item names
+
+# %% [markdown]
+# If you want to use the old item names ('panas_') just comment out this section.
+
+# %%
+# Create a dictionary for affect mapping
+affect_map = {
+    "panas_attentiveness": "attentive",
+    "panas_joviality1": "cheerful",
+    "panas_joviality2": "happy",
+    "panas_selfassurance": "self_confident",
+    "panas_serenity1": "relaxed",
+    "panas_serenity2": "calm",
+    "panas_fear1": "anxious",
+    "panas_fear2": "nervous",
+    "panas_guilt1": "ashamed",
+    "panas_guilt2": "dissatisfied_myself",
+    "panas_hostility1": "irritable",
+    "panas_hostility2": "angry",
+    "panas_loneliness": "lonely",
+    "panas_sadness1": "downcast",
+    "panas_sadness2": "sad",
+    "panas_shyness": "shy",
+    "panas_fatigue": "fatigue"
+}
+
+# Replace the names in the 'item' column based on the directory
+df_ema_content["item"] = df_ema_content["item"].replace(affect_map)
+
+# %%
+# sanity check 1:
+df_ema_content['item'].unique()
+
+# %%
+# sanity check 2:
+old_items = {
+    "panas_selfassurance", "panas_joviality2", "panas_fatigue",
+    "panas_joviality1", "panas_fear1", "panas_hostility2",
+    "panas_serenity2", "panas_shyness", "panas_hostility1",
+    "panas_guilt1", "panas_fear2", "panas_sadness1",
+    "panas_guilt2", "panas_loneliness", "panas_serenity1",
+    "panas_sadness2", "panas_attentiveness",
+    "er_intensity", "er_control", "er_distraction",
+    "er_reappraisal", "er_rumination", "er_relaxation",
+    "er_suppression", "er_acceptance", "situation1",
+    "situation2", "event_general", "event_social1",
+    "ta_behavioral_2", "ta_kognitiv", "ta_kognitiv_2",
+    "ta_behavioral", "physical_health", "ecg_control",
+    "event_social2", "event_social3"
+}
+
+new_items = set(df_ema_content["item"].unique())
+
+print(len(old_items))
+print(len(new_items))
 
 # %% [markdown]
 # ### Export passive, EMA and Monitoring
