@@ -19,8 +19,10 @@ echo "=== Started passive aggregation pipeline at $(date '+%Y-%m-%d %H:%M:%S') =
 echo "Node: $SLURM_NODENAME"
 echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 
-# Set environment variable to disable debug mode (run on full dataset)
-export DEBUG=False
+# Activate Conda environment
+CONDA_ENV_NAME=${CONDA_ENV_NAME:-preact}
+eval "$(conda shell.bash hook 2>/dev/null || true)"
+conda activate "$CONDA_ENV_NAME" 2>/dev/null || source activate "$CONDA_ENV_NAME" 2>/dev/null || true
 
 # Run passive data aggregation
 echo ""

@@ -997,18 +997,19 @@ print(len(new_items))
 backup_path = raw_path + "/backup_passive_recent.feather"
 df_passive_final.to_feather(backup_path)
 
-preprocessed_path_final = preprocessed_path + "/backup_passive_recent.feather"
+preprocessed_path_final = preprocessed_path + "/passive/granular" + "/backup_passive_recent.feather"
 df_passive_final.to_feather(preprocessed_path_final)
 
 #preprocessed_path_freezed_final = preprocessed_path_freezed + "/code_check" + "/backup_passive_recent.parquet"
 #df_passive_final.to_parquet(preprocessed_path_freezed_final)
 ema_save_path = str(Path(preprocessed_path) / "ema")
+meta_save_path =  str(Path(preprocessed_path) / "meta")
 
-with open(ema_save_path + '/ema_meta.pkl', 'wb') as file:
+with open(meta_save_path + '/ema_meta.pkl', 'wb') as file:
     pickle.dump(df_ema_meta, file)
 
     
-with open(preprocessed_path + '/monitoring_data.pkl', 'wb') as file:
+with open(meta_save_path + '/monitoring_data.pkl', 'wb') as file:
     pickle.dump(df_monitoring, file)
 
     
@@ -1018,11 +1019,11 @@ with open(ema_save_path + '/ema_content.pkl', 'wb') as file:
 # %%
 
 # Export ema meta as CSV
-df_ema_path = ema_save_path + '/ema_meta.csv'
+df_ema_path = meta_save_path + '/ema_meta.csv'
 df_ema_meta.to_csv(df_ema_path, index=False)
 
 # Export df_monitoring as CSV
-df_monitoring_csv_path = preprocessed_path + '/monitoring_data.csv'
+df_monitoring_csv_path = meta_save_path + '/monitoring_data.csv'
 df_monitoring.to_csv(df_monitoring_csv_path, index=False)
 
 # Export df_ema_content as CSV
