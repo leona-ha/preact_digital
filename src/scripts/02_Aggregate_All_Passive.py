@@ -37,6 +37,8 @@ logging.basicConfig(
 )
 import pickle
 from server_config import base_path
+base_path = Path(base_path)  # convert to Path
+
 
 from src.preprocessing.aggregation import (
     aggregate_sleep_daily,

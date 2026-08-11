@@ -1,13 +1,14 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: ipynb,py:percent
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.19.3
 #   kernelspec:
-#     display_name: tiki13
+#     display_name: TessaPyEnv
 #     language: python
 #     name: python3
 # ---
@@ -38,6 +39,8 @@ import plotly.express as px
 PROJECT_ROOT = here()
 
 from server_config import base_path, proj_sheet
+base_path = Path(base_path)  # convert to Path
+
 raw_path = str(base_path / "raw")
 preprocessed_path = str(base_path / "preprocessed")
 backup_path = str(base_path / "backup")
@@ -47,7 +50,8 @@ from src.preprocessing.infer_timeoffset import (
     merge_fill_tz,
 )
 # --- Dates ------------------------------------------------------------
-today_str = date.today().strftime("%d%m%Y")        
+today_str = "03082026"
+#today_str = date.today().strftime("%d%m%Y")        
 today_day = pd.Timestamp.today().normalize()       
 
 # --- Path -------------------------------------------------------------
@@ -193,7 +197,6 @@ df_backup_recent["local_timestamp_end"] = (
     df_backup_recent["timestamp_end"] + df_backup_recent["inferred_tzoffset_timedelta"]
 ).dt.tz_localize(None)
 
-df_backup_recent.head()
 
 # %%
 assert df_backup_recent.inferred_tzoffset.isna().sum() == 0, (
@@ -280,9 +283,6 @@ manual_for_map = {
 }
 
 df_backup_recent["for_id"] = df_backup_recent["for_id"].fillna(df_backup_recent["id"].map(manual_for_map))
-
-# %%
-df_backup_recent.head()
 
 # %%
 # ensure data types are coded correctly
@@ -577,8 +577,6 @@ df_max_day_burst0 = df_max_day.loc[df_max_day["measurement_burst"] == 0]
 df_max_day_burst1 = df_max_day.loc[df_max_day["measurement_burst"] == 1]
 df_max_day_burst2 = df_max_day.loc[df_max_day["measurement_burst"] == 2]
 
-df_max_day_burst1
-
 
 # %% [markdown]
 # CLUSTER PLOTTING TO DECIDE HOW TO PROCEED WITH MAX DAY INDEX > 16
@@ -710,10 +708,6 @@ def plot_ema_clusters(
 
 
 # %%
-# OUT OF PHASE ACTIVATIONS T20 (IDs)
-df_max_day_burst1 
-
-# %%
 # CLUSTER PLOTTING T20
 daily_counts_b1, filtered_b1 = plot_ema_clusters(
     df_ema_content=df_ema_content,
@@ -723,9 +717,6 @@ daily_counts_b1, filtered_b1 = plot_ema_clusters(
     start_col="ema_t20_start"
 )
 
-# %%
-# OUT OF PHASE ACTIVATIONS TPost (IDs)
-df_max_day_burst2
 
 # %%
 # CLUSTER PLOTTING TPost
@@ -942,6 +933,64 @@ df_ema_content.drop(columns=['response_text','item_code_map','beep_type' ,'beep_
               'element', 'item_order', 'session_id'], inplace=True) 
 
 # %% [markdown]
+# ### 3.5 Rename Affect Item names
+
+# %% [markdown]
+# If you want to use the old item names ('panas_') just comment out this section.
+
+# %%
+# Create a dictionary for affect mapping
+affect_map = {
+    "panas_attentiveness": "attentive",
+    "panas_joviality1": "cheerful",
+    "panas_joviality2": "happy",
+    "panas_selfassurance": "self_confident",
+    "panas_serenity1": "relaxed",
+    "panas_serenity2": "calm",
+    "panas_fear1": "anxious",
+    "panas_fear2": "nervous",
+    "panas_guilt1": "ashamed",
+    "panas_guilt2": "dissatisfied_myself",
+    "panas_hostility1": "irritable",
+    "panas_hostility2": "angry",
+    "panas_loneliness": "lonely",
+    "panas_sadness1": "downcast",
+    "panas_sadness2": "sad",
+    "panas_shyness": "shy",
+    "panas_fatigue": "fatigue"
+}
+
+# Replace the names in the 'item' column based on the directory
+df_ema_content["item"] = df_ema_content["item"].replace(affect_map)
+
+# %%
+# sanity check 1:
+df_ema_content['item'].unique()
+
+# %%
+# sanity check 2:
+old_items = {
+    "panas_selfassurance", "panas_joviality2", "panas_fatigue",
+    "panas_joviality1", "panas_fear1", "panas_hostility2",
+    "panas_serenity2", "panas_shyness", "panas_hostility1",
+    "panas_guilt1", "panas_fear2", "panas_sadness1",
+    "panas_guilt2", "panas_loneliness", "panas_serenity1",
+    "panas_sadness2", "panas_attentiveness",
+    "er_intensity", "er_control", "er_distraction",
+    "er_reappraisal", "er_rumination", "er_relaxation",
+    "er_suppression", "er_acceptance", "situation1",
+    "situation2", "event_general", "event_social1",
+    "ta_behavioral_2", "ta_kognitiv", "ta_kognitiv_2",
+    "ta_behavioral", "physical_health", "ecg_control",
+    "event_social2", "event_social3"
+}
+
+new_items = set(df_ema_content["item"].unique())
+
+print(len(old_items))
+print(len(new_items))
+
+# %% [markdown]
 # ### Export passive, EMA and Monitoring
 
 # %%
@@ -980,6 +1029,8 @@ df_monitoring.to_csv(df_monitoring_csv_path, index=False)
 # Export df_ema_content as CSV
 df_ema_content_csv_path = ema_save_path + '/ema_content.csv'
 df_ema_content.to_csv(df_ema_content_csv_path, index=False)
+
+print("Exported df_ema_meta, df_monitoring, and df_ema_content as CSV files.")
 
 # Export df_ema_content as CSV to freezed for data check
 #df_ema_content_csv_path = preprocessed_path_freezed +'/code_check' +'/ema_content_recent.csv'
