@@ -1215,6 +1215,25 @@ def aggregate_sleep_daily(df_backup,
     df_longest["sleep_offset_hour_sin"] = np.sin(
         2 * np.pi * df_longest["sleep_offset_hour"] / 24.0
     )
+    # Linear clock-time features:
+    # Shift times between midnight and noon to the following-day scale.
+    # Examples:
+    #   23:30 -> 23.5
+    #   00:30 -> 24.5
+    #   06:15 -> 30.25
+    df_longest["sleep_onset_hour_linear"] = df_longest[
+        "sleep_onset_hour"
+    ].where(
+        df_longest["sleep_onset_hour"] >= 12.0,
+        df_longest["sleep_onset_hour"] + 24.0,
+    )
+
+    df_longest["sleep_offset_hour_linear"] = df_longest[
+        "sleep_offset_hour"
+    ].where(
+        df_longest["sleep_offset_hour"] >= 12.0,
+        df_longest["sleep_offset_hour"] + 24.0,
+    )
 
     # Select columns for longest session (prefix with "longest_")
     longest_cols = [
@@ -1239,6 +1258,8 @@ def aggregate_sleep_daily(df_backup,
         "awake_pct",
         "light_sleep_pct",
         "deep_sleep_pct",
+        "sleep_onset_hour_linear",
+        "sleep_offset_hour_linear",
     ]
 
     df_longest_subset = df_longest[["id", "local_day"] + longest_cols].copy()

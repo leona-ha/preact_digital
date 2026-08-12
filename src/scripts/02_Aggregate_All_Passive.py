@@ -41,6 +41,7 @@ base_path = Path(base_path)  # convert to Path
 
 
 from src.preprocessing.aggregation import (
+    compute_sleep_sessions,
     aggregate_sleep_daily,
     aggregate_hr_daily,
     aggregate_steps_daily,
@@ -111,16 +112,31 @@ type_coverage
 
 # %%
 # cProfile.run('aggregate_sleep_daily(df_backup)')
-
+df_sleep_sessions = compute_sleep_sessions(
+    df_backup,
+    max_gap_seconds=5400,
+)
 # %%
-df_sleep_daily = aggregate_sleep_daily(df_backup)
-df_sleep_daily.head()
+df_sleep_daily = aggregate_sleep_daily(
+    df_backup,
+    max_gap_seconds=5400,
+    df_sessions=df_sleep_sessions,
+    valid_sessions_only=True,
+)
 
 # %% [markdown]
 # ### Heart Rate
 
 # %%
-df_hr_daily = aggregate_hr_daily(df_backup, include_zero_hours=False)
+df_valid_sleep_sessions = df_sleep_sessions.loc[
+    df_sleep_sessions["valid_sleep_session"]
+].copy()
+
+df_hr_daily = aggregate_hr_daily(
+    df_backup,
+    include_zero_hours=False,
+    df_sleep_sessions=df_sleep_sessions,
+)
 
 
 # %%
