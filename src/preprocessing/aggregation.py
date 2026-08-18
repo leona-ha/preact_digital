@@ -1726,7 +1726,8 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
         .astype(int)
     )
     df["SPM"] = df["steps"] / (df["duration"] / 60)
-    df["SPM"] = df["SPM"].replace([np.inf, -np.inf], np.nan).fillna(0)
+    df["SPM"] = df["SPM"].replace([np.inf, -np.inf], np.nan)
+    df.loc[df["SPM"] > 250, "SPM"] = np.nan
 
     # Expand to 1-minute resolution
     df["timestamp_start_minute"] = df["timestamp_start"].dt.round("min")
