@@ -1294,7 +1294,16 @@ def aggregate_sleep_daily(df_backup,
 
 
 # TODO HR zones - change the algorithm
-def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=False, df_sleep_sessions=None):
+HR_NIGHT_START_HOUR = 0
+HR_NIGHT_END_HOUR = 6
+
+def aggregate_hr_daily(
+    df_backup,
+    zone_thresholds=(60, 100),
+    include_zero_hours=False,
+    df_sleep_sessions=None,
+    hr_range=(30, 220),
+):
     """
     Aggregate heart rate data to daily level.
 
@@ -1307,46 +1316,41 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     include_zero_hours : bool
         Whether to include hours with zero records when computing per-hour stats
     df_sleep_sessions : pd.DataFrame, optional
-        Precomputed sleep sessions dataframe containing sleep onset/offset columns. If None, it will be computed automatically.
+        Precomputed sleep sessions dataframe containing sleep onset/offset
+        columns. If None, it will be computed automatically.
+    hr_range : tuple
+        (min_bpm, max_bpm) physiological plausibility range. Non-numeric values
+        and values outside this range are removed before aggregation.
 
     Returns
     -------
     pd.DataFrame
         Daily HR aggregates with columns: id, local_day, and HR metrics
 
-    Returned metrics include:
+    Returned metrics include (in addition to the original set):
     | Column Name | Description | Source / Calculation |
     | :--- | :--- | :--- |
-    | **`id`** | Participant identifier | Grouping key |
-    | **`local_day`** | The local calendar day of the records (floored to midnight) | Grouping key |
-    | **`HR_count`** | Total number of 1-second HR records in the day | Calculated on 1-second expanded data |
-    | **`HR_mean`** | Average heart rate over the day | Calculated on 1-second expanded data |
-    | **`HR_std`** | Standard deviation of heart rate | Calculated on 1-second expanded data |
-    | **`HR_min`** | Minimum heart rate recorded in the day | Calculated on 1-second expanded data |
-    | **`HR_max`** | Maximum heart rate recorded in the day | Calculated on 1-second expanded data |
-    | **`HR_skew`** | Skewness of the heart rate distribution | Calculated on 1-second expanded data |
-    | **`HR_kurtosis`** | Kurtosis of the heart rate distribution | Calculated on 1-second expanded data |
-    | **`HR_zone_resting`** | Total seconds spent with HR below resting threshold (default < 60) | Calculated on 1-second expanded data |
-    | **`HR_zone_moderate`** | Total seconds spent with HR between resting and vigorous thresholds (default 60 ≤ HR < 100) | Calculated on 1-second expanded data |
-    | **`HR_zone_vigorous`** | Total seconds spent with HR above vigorous threshold (default ≥ 100) | Calculated on 1-second expanded data |
-    | **`HR_raw_records`** | Total count of raw HR records logged per day | Calculated on raw unexpanded records |
-    | **`HR_raw_hours_with_records`** | Number of unique hours in the day that contain at least one raw HR record | Calculated on raw unexpanded records |
-    | **`HR_raw_records_per_hour_mean`** | Mean of raw records per hour (averaged **only over hours with data**) | Calculated on raw unexpanded records |
-    | **`HR_raw_records_per_hour_median`**| Median of raw records per hour (calculated **only over hours with data**) | Calculated on raw unexpanded records |
-    | **`HR_raw_records_per_hour_std`** | Standard deviation of raw records per hour (calculated **only over hours with data**) | Calculated on raw unexpanded records |
-    | **`HR_seconds_hours_with_data`** | Number of unique hours in the day containing 1-second expanded HR data | Calculated on 1-second expanded data |
-    | **`HR_seconds_per_hour_mean`** | Mean of 1-second HR records per hour (averaged **only over hours with data**) | Calculated on 1-second expanded data |
-    | **`HR_seconds_per_hour_median`** | Median of 1-second HR records per hour (calculated **only over hours with data**) | Calculated on 1-second expanded data |
-    | **`HR_seconds_per_hour_std`** | Standard deviation of 1-second HR records per hour (calculated **only over hours with data**) | Calculated on 1-second expanded data |
-    | **`HR_coverage`** | Percentage of the day covered by HR recordings (`HR_raw_hours_with_records / 24`) | Derived from raw coverage stats |
-    | **`HR_night_mean`** | Average heart rate during nighttime hours (`hour >= HR_NIGHT_START_HOUR` or `hour <= HR_NIGHT_END_HOUR`) | Calculated on 1-second expanded data |
-    | **`HR_night_std`** | Standard deviation of heart rate during nighttime hours | Calculated on 1-second expanded data |
-    | **`HR_night_count`** | Number of 1-second HR records during nighttime hours | Calculated on 1-second expanded data |
-    | **`HR_sleep_mean`** | Average heart rate during sleep sessions | Calculated on 1-second expanded data |
-    | **`HR_sleep_std`** | Standard deviation of heart rate during sleep sessions | Calculated on 1-second expanded data |
-    | **`HR_sleep_count`** | Number of 1-second HR records during sleep sessions | Calculated on 1-second expanded data |
+    | **`HR_wake_mean`** | Average heart rate outside sleep sessions | 1-second samples not within [sleep_onset, sleep_offset] of any sleep session, per local calendar day |
+    | **`HR_wake_std`** | Standard deviation of heart rate outside sleep sessions | Same as above |
+    | **`HR_wake_count`** | Number of 1-second HR records outside sleep sessions | Same as above |
+    | **`HR_day_mean`** | Average heart rate during fixed daytime hours (complement of the night window, i.e. `HR_NIGHT_END_HOUR <= hour < HR_NIGHT_START_HOUR`) | Calculated on 1-second expanded data, per local calendar day |
+    | **`HR_day_std`** | Standard deviation of heart rate during fixed daytime hours | Same as above |
+    | **`HR_day_count`** | Number of 1-second HR records during fixed daytime hours | Same as above |
+
+    Notes
+    -----
+    - HR_day is the exact clock-time complement of HR_night: with the default
+      constants (night = 20:00-06:00), day = 06:00-20:00. It does not depend on
+      sleep detection, so it is defined even on days without sleep sessions
+      (unlike HR_wake). If you change the night constants, HR_day follows.
+    - HR_wake is only computed when sleep sessions are available. For
+      participants/days without any recorded sleep session, all samples of that
+      day count as "wake"; consider filtering on sleep coverage downstream.
+    - HR_sleep is assigned to the sleep session's wake-up day; HR_wake and all
+      other daily metrics use the local calendar day (midnight to midnight).
     """
     resting_threshold, vigorous_threshold = zone_thresholds
+    hr_min, hr_max = hr_range
 
     # Filter HR data
     df = df_backup[df_backup["modality"] == "HeartRate"].copy()
@@ -1361,6 +1365,25 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     ].copy()
     df = df.rename(columns={"float_value": "HeartRate"})
 
+    # ------------------------------------------------------------------
+    # NEW: remove non-numeric and physiologically implausible HR values
+    # ------------------------------------------------------------------
+    n_before_hr_filter = len(df)
+    df["HeartRate"] = pd.to_numeric(df["HeartRate"], errors="coerce")
+    df = df.dropna(subset=["HeartRate"])
+    df = df[df["HeartRate"].between(hr_min, hr_max)].copy()
+    n_removed = n_before_hr_filter - len(df)
+    n_after_hr_filter = len(df)
+    logging.info(
+        "HR: removed %d of %d records (%.4f%%) that were non-numeric or "
+        "outside the physiological range %d-%d bpm.",
+        n_removed,
+        n_before_hr_filter,
+        100 * n_removed / n_before_hr_filter if n_before_hr_filter else 0.0,
+        hr_min,
+        hr_max,
+    )
+
     # Compute duration and expand to 1-second resolution
     df["duration"] = (
         (df["timestamp_end"] - df["timestamp_start"])
@@ -1369,6 +1392,13 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         .astype(int)
     )
     df = df[df["duration"] > 0]  # Remove zero-duration records
+    n_zero_duration = n_after_hr_filter - len(df)
+    logging.info(
+        "HR: removed %d of %d records (%.4f%%) with zero or negative duration.",
+        n_zero_duration,
+        n_after_hr_filter,
+        100 * n_zero_duration / n_after_hr_filter if n_after_hr_filter else 0.0,
+    )
 
     # Record-level daily coverage (pre-expansion)
     df["local_day"] = df["local_timestamp_start"].dt.floor("D")
@@ -1425,15 +1455,34 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
 
     _hour = df_avg["local_timestamp"].dt.hour
 
-    df_avg["night_day"] = np.where(
-        _hour >= HR_NIGHT_START_HOUR,
-        (df_avg["local_timestamp"] + pd.Timedelta(days=1)).dt.floor("D"),
-        df_avg["local_timestamp"].dt.floor("D"),
-    )
-
-    # strict < on the end hour: 20:00-06:00 is a 10-hour window.
-    # `<=` made it 20:00-07:00.
-    df_avg["is_night"] = (_hour >= HR_NIGHT_START_HOUR) | (_hour < HR_NIGHT_END_HOUR)
+    # Night window definition. Two cases:
+    #  - START > END (e.g. 20 -> 6): window wraps midnight. Samples from
+    #    [START, 24) are assigned to the FOLLOWING calendar day so that one
+    #    night belongs to one (wake-up) day.
+    #  - START < END (e.g. 0 -> 6): window lies within a single calendar day.
+    #    No day shift is needed. Boundaries are [START, END), so END is
+    #    exclusive (0 -> 6 is a 6-hour window: 00:00-05:59).
+    if HR_NIGHT_START_HOUR > HR_NIGHT_END_HOUR:
+        # wraps midnight
+        df_avg["is_night"] = (
+            (_hour >= HR_NIGHT_START_HOUR) | (_hour < HR_NIGHT_END_HOUR)
+        )
+        df_avg["night_day"] = np.where(
+            _hour >= HR_NIGHT_START_HOUR,
+            (df_avg["local_timestamp"] + pd.Timedelta(days=1)).dt.floor("D"),
+            df_avg["local_timestamp"].dt.floor("D"),
+        )
+    elif HR_NIGHT_START_HOUR < HR_NIGHT_END_HOUR:
+        # within one calendar day
+        df_avg["is_night"] = (
+            (_hour >= HR_NIGHT_START_HOUR) & (_hour < HR_NIGHT_END_HOUR)
+        )
+        df_avg["night_day"] = df_avg["local_timestamp"].dt.floor("D")
+    else:
+        raise ValueError(
+            "HR_NIGHT_START_HOUR and HR_NIGHT_END_HOUR must differ "
+            "(equal values define an empty night window)."
+        )
 
     df_hr_night = (
         df_avg[df_avg["is_night"]]
@@ -1447,6 +1496,21 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         .rename(columns={"night_day": "local_day"})
     )
 
+    # ------------------------------------------------------------------
+    # NEW: fixed-window daytime HR = complement of the night window.
+    # Daytime hours all fall within a single calendar day, so no day-shift
+    # (night_day) logic is needed; the local calendar day is used directly.
+    # ------------------------------------------------------------------
+    df_hr_day = (
+        df_avg[~df_avg["is_night"]]
+        .groupby(["id", "local_day"], observed=True)
+        .agg(
+            HR_day_mean=("HeartRate", "mean"),
+            HR_day_std=("HeartRate", "std"),
+            HR_day_count=("HeartRate", "count"),
+        )
+        .reset_index()
+    )
 
     # Sleep HR: use sleep onset and offset from sleep sessions
     if df_sleep_sessions is None:
@@ -1455,17 +1519,28 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
         except Exception:
             df_sleep_sessions = None
 
+    _empty_sleep_cols = [
+        "id", "local_day", "HR_sleep_mean", "HR_sleep_std", "HR_sleep_count"
+    ]
+    _empty_wake_cols = [
+        "id", "local_day", "HR_wake_mean", "HR_wake_std", "HR_wake_count"
+    ]
+
     if df_sleep_sessions is not None and not df_sleep_sessions.empty:
         df_sleep_sessions_for_merge = df_sleep_sessions[
             ["id", "sleep_onset", "sleep_offset", "day"]
         ].dropna(subset=["sleep_onset", "sleep_offset"]).copy()
-        
+
         if not df_sleep_sessions_for_merge.empty:
-            df_sleep_sessions_for_merge["local_day_sleep"] = pd.to_datetime(df_sleep_sessions_for_merge["day"])
-            df_sleep_sessions_for_merge = df_sleep_sessions_for_merge.sort_values("sleep_onset")
-            
+            df_sleep_sessions_for_merge["local_day_sleep"] = pd.to_datetime(
+                df_sleep_sessions_for_merge["day"]
+            )
+            df_sleep_sessions_for_merge = df_sleep_sessions_for_merge.sort_values(
+                "sleep_onset"
+            )
+
             df_avg_sorted = df_avg.sort_values("local_timestamp")
-            
+
             df_merged = pd.merge_asof(
                 df_avg_sorted,
                 df_sleep_sessions_for_merge,
@@ -1474,12 +1549,14 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
                 by="id",
                 direction="backward",
             )
-            
-            is_sleep = (df_merged["local_timestamp"] >= df_merged["sleep_onset"]) & (
+
+            is_sleep = (
+                df_merged["local_timestamp"] >= df_merged["sleep_onset"]
+            ) & (
                 df_merged["local_timestamp"] <= df_merged["sleep_offset"]
             )
             df_sleep_hr = df_merged[is_sleep]
-            
+
             if not df_sleep_hr.empty:
                 df_hr_sleep = (
                     df_sleep_hr.groupby(["id", "local_day_sleep"], observed=True)
@@ -1492,11 +1569,31 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
                     .rename(columns={"local_day_sleep": "local_day"})
                 )
             else:
-                df_hr_sleep = pd.DataFrame(columns=["id", "local_day", "HR_sleep_mean", "HR_sleep_std", "HR_sleep_count"])
+                df_hr_sleep = pd.DataFrame(columns=_empty_sleep_cols)
+
+            # ----------------------------------------------------------
+            # NEW: wake HR = complement of sleep sessions, per calendar day
+            # ----------------------------------------------------------
+            df_wake_hr = df_merged[~is_sleep]
+
+            if not df_wake_hr.empty:
+                df_hr_wake = (
+                    df_wake_hr.groupby(["id", "local_day"], observed=True)
+                    .agg(
+                        HR_wake_mean=("HeartRate", "mean"),
+                        HR_wake_std=("HeartRate", "std"),
+                        HR_wake_count=("HeartRate", "count"),
+                    )
+                    .reset_index()
+                )
+            else:
+                df_hr_wake = pd.DataFrame(columns=_empty_wake_cols)
         else:
-            df_hr_sleep = pd.DataFrame(columns=["id", "local_day", "HR_sleep_mean", "HR_sleep_std", "HR_sleep_count"])
+            df_hr_sleep = pd.DataFrame(columns=_empty_sleep_cols)
+            df_hr_wake = pd.DataFrame(columns=_empty_wake_cols)
     else:
-        df_hr_sleep = pd.DataFrame(columns=["id", "local_day", "HR_sleep_mean", "HR_sleep_std", "HR_sleep_count"])
+        df_hr_sleep = pd.DataFrame(columns=_empty_sleep_cols)
+        df_hr_wake = pd.DataFrame(columns=_empty_wake_cols)
 
     # Second-level hourly coverage (post-expansion)
     df_hr_seconds_hourly = (
@@ -1641,9 +1738,17 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
     df_hr_daily = df_hr_daily.merge(df_hr_night, on=["id", "local_day"], how="left")
     df_hr_daily["HR_night_count"] = df_hr_daily["HR_night_count"].fillna(0).astype(int)
 
+    # NEW: Merge fixed-window daytime HR stats
+    df_hr_daily = df_hr_daily.merge(df_hr_day, on=["id", "local_day"], how="left")
+    df_hr_daily["HR_day_count"] = df_hr_daily["HR_day_count"].fillna(0).astype(int)
+
     # Merge sleep HR stats
     df_hr_daily = df_hr_daily.merge(df_hr_sleep, on=["id", "local_day"], how="left")
     df_hr_daily["HR_sleep_count"] = df_hr_daily["HR_sleep_count"].fillna(0).astype(int)
+
+    # NEW: Merge wake HR stats
+    df_hr_daily = df_hr_daily.merge(df_hr_wake, on=["id", "local_day"], how="left")
+    df_hr_daily["HR_wake_count"] = df_hr_daily["HR_wake_count"].fillna(0).astype(int)
 
     return df_hr_daily
 
@@ -1651,6 +1756,12 @@ def aggregate_hr_daily(df_backup, zone_thresholds=(60, 100), include_zero_hours=
 def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     """
     Aggregate steps data to daily level.
+
+    Identical to the original except that every filtering step now logs how
+    many records it removed (count and percentage) via logging.info:
+      - non-numeric step values
+      - records with duration > cutoff_seconds (or missing timestamps)
+      - records whose SPM was non-finite (zero/NaN duration) and was set to 0
 
     Parameters
     ----------
@@ -1665,40 +1776,7 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     -------
     pd.DataFrame
         Daily steps aggregates with columns: id, local_day, and step metrics
-
-    Returned metrics include:
-    | Column Name | Description | Source / Calculation |
-    | :--- | :--- | :--- |
-    | **`id`** | Participant identifier | Grouping key |
-    | **`local_day`** | The local calendar day of the records (floored to midnight) | Grouping key |
-    | **`for_id`** | External participant identifier | First available value in day |
-    | **`steps_in_day`** | Total daily steps proxy from expanded minute-level series | Sum of steps across day |
-    | **`SPM_max`** | Maximum minute-level step intensity in day | Max of daily steps per minute (SPM) |
-    | **`SPM_count`** | Number of expanded minute records in day | Count of daily `SPM` |
-    | **`SPM_mean`** | Mean minute-level step intensity in day | Mean of daily `SPM` |
-    | **`SPM_std`** | Standard deviation of minute-level step intensity in day | Std of daily `SPM` |
-    | **`SPM_skew`** | Skewness of minute-level step intensity in day | Skew of daily `SPM` |
-    | **`SPM_kurtosis`** | Kurtosis of minute-level step intensity in day | Kurtosis of daily `SPM` |
-    | **`SPM_25pct`** | 25th percentile of minute-level step intensity | Quantile of daily `SPM` |
-    | **`SPM_50pct`** | 50th percentile (median) of minute-level step intensity | Quantile of daily `SPM` |
-    | **`SPM_75pct`** | 75th percentile of minute-level step intensity | Quantile of daily `SPM` |
-    | **`steps_night_sum`** | Total nighttime steps | Sum of `SPM` where local hour `< nighttime_hour` |
-    | **`steps_night_mean`** | Mean nighttime steps intensity | Mean of `SPM` where local hour `< nighttime_hour` |
-    | **`steps_hours_with_records`** | Number of unique local hours with any steps records | Count of hourly bins after minute expansion |
-    | **`steps_per_hour`** | Mean steps per recorded hour | Mean of hourly `steps_inhour` |
-    | **`SPM_max_avgbyhour`** | Average hourly max `SPM` across the day | Mean of hourly max `SPM` |
-    | **`SPM_mean_avgbyhour`** | Average hourly mean `SPM` across the day | Mean of hourly mean `SPM` |
-    | **`SPM_std_avgbyhour`** | Average hourly std `SPM` across the day | Mean of hourly std `SPM` |
-    | **`SPM_skew_avgbyhour`** | Average hourly skew `SPM` across the day | Mean of hourly skew `SPM` |
-    | **`SPM_kurtosis_avgbyhour`** | Average hourly kurtosis `SPM` across the day | Mean of hourly kurtosis `SPM` |
-    | **`steps_coverage`** | Percentage of the day covered by steps recordings (`steps_hours_with_records / 24`) | Derived from hourly coverage |
-    | **`steps_in_most_active_hour`** | Steps volume in the most active hour | `steps_inhour` at daily max hour |
-    | **`most_active_hour`** | Clock hour (0-23) with highest steps volume | Hour of daily max `steps_inhour` |
-    | **`max_spm_in_most_active_hour`** | Max minute-level intensity in most active hour | Hour-level `SPM_max_inhour` at daily max hour |
-    | **`avg_spm_in_most_active_hour`** | Mean minute-level intensity in most active hour | Hour-level `SPM_mean_inhour` at daily max hour |
-    | **`hour_reach_25pct_steps_cumsum`** | Clock hour where cumulative steps first reach 25% of day total | From hourly cumulative sum |
-    | **`hour_reach_50pct_steps_cumsum`** | Clock hour where cumulative steps first reach 50% of day total | From hourly cumulative sum |
-    | **`hour_reach_75pct_steps_cumsum`** | Clock hour where cumulative steps first reach 75% of day total | From hourly cumulative sum |
+        (same column set as the original function).
     """
     # Filter steps data
     df = df_backup[df_backup["modality"] == "Steps"].copy()
@@ -1714,9 +1792,33 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     ].copy()
     df = df.rename(columns={"float_value": "steps"})
 
+    # NEW: remove non-numeric step values, with logging
+    n_before_numeric = len(df)
+    df["steps"] = pd.to_numeric(df["steps"], errors="coerce")
+    df = df.dropna(subset=["steps"])
+    n_non_numeric = n_before_numeric - len(df)
+    logging.info(
+        "Steps: removed %d of %d records (%.4f%%) with non-numeric or "
+        "missing step values.",
+        n_non_numeric,
+        n_before_numeric,
+        100 * n_non_numeric / n_before_numeric if n_before_numeric else 0.0,
+    )
+
     # Compute duration and apply cutoff
     df["start_end"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
+
+    n_before_cutoff = len(df)
     df = df[df["start_end"] <= cutoff_seconds].copy()
+    n_cutoff_removed = n_before_cutoff - len(df)
+    logging.info(
+        "Steps: removed %d of %d records (%.4f%%) with duration > %d s "
+        "(or missing timestamps).",
+        n_cutoff_removed,
+        n_before_cutoff,
+        100 * n_cutoff_removed / n_before_cutoff if n_before_cutoff else 0.0,
+        cutoff_seconds,
+    )
 
     # Compute SPM (steps Per Minute)
     df["duration"] = (
@@ -1726,6 +1828,252 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
         .astype(int)
     )
     df["SPM"] = df["steps"] / (df["duration"] / 60)
+
+    # NEW: log how many SPM values were non-finite (zero/NaN duration) and set to 0
+    n_invalid_spm = int((~np.isfinite(df["SPM"])).sum())
+    logging.info(
+        "Steps: %d of %d records (%.4f%%) had non-finite SPM "
+        "(zero or missing duration); SPM set to 0 for these records.",
+        n_invalid_spm,
+        len(df),
+        100 * n_invalid_spm / len(df) if len(df) else 0.0,
+    )
+    df["SPM"] = df["SPM"].replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    # Expand to 1-minute resolution
+    df["timestamp_start_minute"] = df["timestamp_start"].dt.round("min")
+    df["duration_minutes"] = np.maximum(1, (df["duration"] / 60).round(0).astype(int))
+
+    df_expanded = df.loc[df.index.repeat(df["duration_minutes"])].copy()
+    df_expanded["time_offset"] = df_expanded.groupby(level=0).cumcount()
+    df_expanded["timestamp"] = df_expanded["timestamp_start_minute"] + pd.to_timedelta(
+        df_expanded["time_offset"], unit="min"
+    )
+    df_expanded["local_timestamp"] = df_expanded["local_timestamp_start"].dt.round(
+        "min"
+    ) + pd.to_timedelta(df_expanded["time_offset"], unit="min")
+
+    # Deduplicate overlapping entries via mean
+    df_avg = (
+        df_expanded.groupby(["id", "timestamp"], observed=True)
+        .agg(
+            for_id=("for_id", "first"),
+            SPM=("SPM", "mean"),
+            local_timestamp=("local_timestamp", "first"),
+        )
+        .reset_index()
+    )
+
+    # Add time features
+    df_avg["local_day"] = df_avg["local_timestamp"].dt.floor("D")
+    df_avg["local_hour"] = df_avg["local_timestamp"].dt.floor("h")
+    df_avg["isnighttime"] = df_avg["local_timestamp"].dt.hour < nighttime_hour
+
+    # Daily aggregation
+    df_steps_daily = (
+        df_avg.groupby(["id", "local_day"], observed=True)
+        .agg(
+            for_id=("for_id", "first"),
+            steps_in_day=("SPM", "sum"),
+            SPM_max=("SPM", "max"),
+            SPM_count=("SPM", "count"),
+            SPM_mean=("SPM", "mean"),
+            SPM_std=("SPM", "std"),
+            SPM_skew=("SPM", "skew"),
+            SPM_kurtosis=("SPM", lambda x: x.kurtosis()),
+            SPM_25pct=("SPM", lambda x: x.quantile(0.25)),
+            SPM_50pct=("SPM", lambda x: x.quantile(0.50)),
+            SPM_75pct=("SPM", lambda x: x.quantile(0.75)),
+            steps_night_sum=(
+                "SPM",
+                lambda x: x[df_avg.loc[x.index, "isnighttime"]].sum(),
+            ),
+            steps_night_mean=(
+                "SPM",
+                lambda x: x[df_avg.loc[x.index, "isnighttime"]].mean(),
+            ),
+        )
+        .reset_index()
+    )
+    df_steps_daily["steps_night_mean"] = df_steps_daily["steps_night_mean"].fillna(0)
+
+    # Hourly aggregation (intermediate step)
+    df_hourly = (
+        df_avg.groupby(["id", "local_hour"], observed=True)
+        .agg(
+            local_day=("local_day", "first"),
+            steps_inhour=("SPM", "sum"),
+            SPM_max_inhour=("SPM", "max"),
+            SPM_mean_inhour=("SPM", "mean"),
+            SPM_std_inhour=("SPM", "std"),
+            SPM_skew_inhour=("SPM", "skew"),
+            SPM_kurtosis_inhour=("SPM", lambda x: x.kurtosis()),
+        )
+        .reset_index()
+    )
+    df_hourly["clock_hour"] = df_hourly["local_hour"].dt.hour
+
+    # Merge hourly stats into daily
+    hourly_agg = (
+        df_hourly.groupby(["id", "local_day"], observed=True)
+        .agg(
+            steps_hours_with_records=("local_hour", "count"),
+            steps_per_hour=("steps_inhour", "mean"),
+            SPM_max_avgbyhour=("SPM_max_inhour", "mean"),
+            SPM_mean_avgbyhour=("SPM_mean_inhour", "mean"),
+            SPM_std_avgbyhour=("SPM_std_inhour", "mean"),
+            SPM_skew_avgbyhour=("SPM_skew_inhour", "mean"),
+            SPM_kurtosis_avgbyhour=("SPM_kurtosis_inhour", "mean"),
+        )
+        .reset_index()
+    )
+
+    df_steps_daily = df_steps_daily.merge(
+        hourly_agg, on=["id", "local_day"], how="left"
+    )
+
+    # Coverage is the share of day-hours with at least one steps record.
+    df_steps_daily["steps_coverage"] = df_steps_daily["steps_hours_with_records"] / 24
+
+    # Most active hour
+    most_active = df_hourly.loc[
+        df_hourly.groupby(["id", "local_day"], observed=True)["steps_inhour"].idxmax()
+    ][
+        [
+            "id",
+            "local_day",
+            "steps_inhour",
+            "clock_hour",
+            "SPM_max_inhour",
+            "SPM_mean_inhour",
+        ]
+    ].rename(
+        columns={
+            "steps_inhour": "steps_in_most_active_hour",
+            "clock_hour": "most_active_hour",
+            "SPM_max_inhour": "max_spm_in_most_active_hour",
+            "SPM_mean_inhour": "avg_spm_in_most_active_hour",
+        }
+    )
+    df_steps_daily = df_steps_daily.merge(
+        most_active, on=["id", "local_day"], how="left"
+    )
+
+    # Percentile hours (when 25%, 50%, 75% of daily steps are reached)
+    df_hourly["steps_inhour_cumsum"] = df_hourly.groupby(
+        ["id", "local_day"], observed=True
+    )["steps_inhour"].cumsum()
+
+    def percentile_hours(group, percentiles=(0.25, 0.5, 0.75)):
+        total_steps = group["steps_inhour_cumsum"].iloc[-1]
+        result = {}
+        for p in percentiles:
+            if total_steps > 0:
+                idx = group["steps_inhour_cumsum"].searchsorted(p * total_steps)
+                idx = min(idx, len(group) - 1)
+                result[f"hour_reach_{int(p * 100)}pct_steps_cumsum"] = group.iloc[idx][
+                    "local_hour"
+                ].hour
+            else:
+                result[f"hour_reach_{int(p * 100)}pct_steps_cumsum"] = np.nan
+        return pd.Series(result)
+
+    pct_hours = (
+        df_hourly.groupby(["id", "local_day"], observed=True)
+        .apply(percentile_hours, include_groups=False)
+        .reset_index()
+    )
+    df_steps_daily = df_steps_daily.merge(pct_hours, on=["id", "local_day"], how="left")
+
+    return df_steps_daily
+
+
+
+def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
+    """
+    Aggregate steps data to daily level.
+
+    Identical to the original except that every filtering step now logs how
+    many records it removed (count and percentage) via logging.info:
+      - non-numeric step values
+      - records with duration > cutoff_seconds (or missing timestamps)
+      - records whose SPM was non-finite (zero/NaN duration) and was set to 0
+
+    Parameters
+    ----------
+    df_backup : pd.DataFrame
+        Raw backup data with steps records
+    cutoff_seconds : int
+        Maximum session duration to include (default 600 = 10 minutes)
+    nighttime_hour : int
+        Hour boundary for nighttime (0 to threshold-1), default 6 means 00:00-05:59
+
+    Returns
+    -------
+    pd.DataFrame
+        Daily steps aggregates with columns: id, local_day, and step metrics
+        (same column set as the original function).
+    """
+    # Filter steps data
+    df = df_backup[df_backup["modality"] == "Steps"].copy()
+    df = df[
+        [
+            "id",
+            "for_id",
+            "timestamp_start",
+            "timestamp_end",
+            "float_value",
+            "local_timestamp_start",
+        ]
+    ].copy()
+    df = df.rename(columns={"float_value": "steps"})
+
+    # NEW: remove non-numeric step values, with logging
+    n_before_numeric = len(df)
+    df["steps"] = pd.to_numeric(df["steps"], errors="coerce")
+    df = df.dropna(subset=["steps"])
+    n_non_numeric = n_before_numeric - len(df)
+    logging.info(
+        "Steps: removed %d of %d records (%.4f%%) with non-numeric or "
+        "missing step values.",
+        n_non_numeric,
+        n_before_numeric,
+        100 * n_non_numeric / n_before_numeric if n_before_numeric else 0.0,
+    )
+
+    # Compute duration and apply cutoff
+    df["start_end"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
+
+    n_before_cutoff = len(df)
+    df = df[df["start_end"] <= cutoff_seconds].copy()
+    n_cutoff_removed = n_before_cutoff - len(df)
+    logging.info(
+        "Steps: removed %d of %d records (%.4f%%) with duration > %d s "
+        "(or missing timestamps).",
+        n_cutoff_removed,
+        n_before_cutoff,
+        100 * n_cutoff_removed / n_before_cutoff if n_before_cutoff else 0.0,
+        cutoff_seconds,
+    )
+
+    # Compute SPM (steps Per Minute)
+    df["duration"] = (
+        (df["timestamp_end"] - df["timestamp_start"])
+        .dt.total_seconds()
+        .fillna(0)
+        .astype(int)
+    )
+    df["SPM"] = df["steps"] / (df["duration"] / 60)
+
+    # NEW: log how many SPM values were non-finite (zero/NaN duration) and set to 0
+    n_invalid_spm = int((~np.isfinite(df["SPM"])).sum())
+    logging.info(
+        "Steps: %d of %d records (%.4f%%) had non-finite SPM "
+        "(zero or missing duration); SPM set to 0 for these records.",
+        n_invalid_spm,
+        len(df),
+        100 * n_invalid_spm / len(df) if len(df) else 0.0,
+    )
     df["SPM"] = df["SPM"].replace([np.inf, -np.inf], np.nan)
     df.loc[df["SPM"] > 250, "SPM"] = np.nan
 
@@ -1875,6 +2223,7 @@ def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
     df_steps_daily = df_steps_daily.merge(pct_hours, on=["id", "local_day"], how="left")
 
     return df_steps_daily
+
 
 
 def aggregate_activity_daily(df_backup, exclude=None):
