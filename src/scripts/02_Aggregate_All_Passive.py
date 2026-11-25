@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.19.5
 #   kernelspec:
 #     display_name: tiki13
 #     language: python
@@ -44,6 +44,7 @@ from src.preprocessing.aggregation import (
     compute_sleep_sessions,
     aggregate_sleep_daily,
     aggregate_hr_daily,
+    aggregate_hr_daily_batched,
     aggregate_steps_daily,
     aggregate_activity_daily,
     aggregate_elevation_daily,
@@ -132,10 +133,11 @@ df_valid_sleep_sessions = df_sleep_sessions.loc[
     df_sleep_sessions["valid_sleep_session"]
 ].copy()
 
-df_hr_daily = aggregate_hr_daily(
+df_hr_daily = aggregate_hr_daily_batched(
     df_backup,
     include_zero_hours=False,
     df_sleep_sessions=df_sleep_sessions,
+    max_seconds_per_batch=20_000_000,  # ~9 GB per batch; lower it if it still gets killed
 )
 
 

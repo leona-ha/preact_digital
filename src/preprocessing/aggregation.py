@@ -1,4 +1,6 @@
+import gc
 import logging
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -288,7 +290,6 @@ def compute_sleep_sessions(
         "n_sleep_blocks",
         "max_sleep_block_duration",
         "qc_tst_gt_12h",
-        "qc_tst_gt_16h",
         "qc_session_gt_18h",
         "qc_sleep_block_gt_16h",
         "valid_sleep_session"
@@ -867,9 +868,9 @@ def compute_sleep_sessions(
         > 12 * 60 * 60
     )
 
-    df_sleep_sessions["qc_tst_gt_16h"] = (
+    df_sleep_sessions["qc_tst_gt_12h"] = (
         df_sleep_sessions["total_sleep_time"]
-        > 16 * 60 * 60
+        > 12 * 60 * 60
     )
 
     df_sleep_sessions["qc_session_gt_18h"] = (
@@ -883,7 +884,7 @@ def compute_sleep_sessions(
     )
 
     df_sleep_sessions["valid_sleep_session"] = ~(
-        df_sleep_sessions["qc_tst_gt_16h"]
+        df_sleep_sessions["qc_tst_gt_12h"]
         | df_sleep_sessions["qc_session_gt_18h"]
         | df_sleep_sessions["qc_sleep_block_gt_16h"]
     )
@@ -1753,239 +1754,196 @@ def aggregate_hr_daily(
     return df_hr_daily
 
 
-def aggregate_steps_daily(df_backup, cutoff_seconds=600, nighttime_hour=6):
+def aggregate_hr_daily_batched(
+    df_backup,
+    df_sleep_sessions=None,
+    max_seconds_per_batch=20_000_000,
+    max_record_seconds=None,
+    hr_range=(30, 220),
+    **kwargs,
+):
     """
-    Aggregate steps data to daily level.
+    Run aggregate_hr_daily on groups of participants to bound peak memory.
 
-    Identical to the original except that every filtering step now logs how
-    many records it removed (count and percentage) via logging.info:
-      - non-numeric step values
-      - records with duration > cutoff_seconds (or missing timestamps)
-      - records whose SPM was non-finite (zero/NaN duration) and was set to 0
+    aggregate_hr_daily expands every HR record to one row per second, so its
+    memory use grows with the total number of seconds covered by the HR
+    records, not with the number of records: about 0.45 KB per one-second row
+    (measured with pandas 2.2). On the full cohort that is far more memory
+    than a node has, and the OS kills the process without a traceback
+    (exit code 137).
+
+    Every step of aggregate_hr_daily is computed within a participant (all
+    groupbys include "id" and the sleep merge uses by="id"), so running it on
+    groups of participants and concatenating the results gives the same
+    output as a single call on all data. Participants are packed, in id
+    order, into batches whose expanded size stays below
+    max_seconds_per_batch.
 
     Parameters
     ----------
     df_backup : pd.DataFrame
-        Raw backup data with steps records
-    cutoff_seconds : int
-        Maximum session duration to include (default 600 = 10 minutes)
-    nighttime_hour : int
-        Hour boundary for nighttime (0 to threshold-1), default 6 means 00:00-05:59
+        Raw backup data. Only HeartRate rows are used.
+    df_sleep_sessions : pd.DataFrame, optional
+        Output of compute_sleep_sessions(). The full table is passed to every
+        batch, so participants without sleep sessions are handled exactly as
+        in a single call. If None, sessions are computed once from df_backup
+        (same fallback as aggregate_hr_daily).
+    max_seconds_per_batch : int
+        Maximum number of one-second rows created per batch. Peak memory of
+        a batch is roughly 0.45 KB times this value (default 20M -> ~9 GB on
+        top of what is already loaded). A participant larger than this is
+        processed in a batch of its own.
+    max_record_seconds : int, optional
+        If given, HR records longer than this many seconds are dropped before
+        aggregation (the number dropped is logged). Default None keeps the
+        behaviour of aggregate_hr_daily unchanged.
+    hr_range : tuple
+        Physiological range passed to aggregate_hr_daily; also used here to
+        size the batches.
+    **kwargs
+        Passed on to aggregate_hr_daily (zone_thresholds, include_zero_hours).
 
     Returns
     -------
     pd.DataFrame
-        Daily steps aggregates with columns: id, local_day, and step metrics
-        (same column set as the original function).
+        Same rows, columns and values as aggregate_hr_daily(df_backup, ...).
     """
-    # Filter steps data
-    df = df_backup[df_backup["modality"] == "Steps"].copy()
-    df = df[
+    hr_min, hr_max = hr_range
+
+    hr = df_backup.loc[
+        df_backup["modality"] == "HeartRate",
         [
             "id",
-            "for_id",
+            "modality",
             "timestamp_start",
             "timestamp_end",
             "float_value",
             "local_timestamp_start",
-        ]
-    ].copy()
-    df = df.rename(columns={"float_value": "steps"})
+        ],
+    ]
 
-    # NEW: remove non-numeric step values, with logging
-    n_before_numeric = len(df)
-    df["steps"] = pd.to_numeric(df["steps"], errors="coerce")
-    df = df.dropna(subset=["steps"])
-    n_non_numeric = n_before_numeric - len(df)
-    logging.info(
-        "Steps: removed %d of %d records (%.4f%%) with non-numeric or "
-        "missing step values.",
-        n_non_numeric,
-        n_before_numeric,
-        100 * n_non_numeric / n_before_numeric if n_before_numeric else 0.0,
-    )
+    if df_sleep_sessions is None:
+        try:
+            df_sleep_sessions = compute_sleep_sessions(df_backup)
+        except Exception:
+            df_sleep_sessions = pd.DataFrame()
 
-    # Compute duration and apply cutoff
-    df["start_end"] = (df["timestamp_end"] - df["timestamp_start"]).dt.total_seconds()
-
-    n_before_cutoff = len(df)
-    df = df[df["start_end"] <= cutoff_seconds].copy()
-    n_cutoff_removed = n_before_cutoff - len(df)
-    logging.info(
-        "Steps: removed %d of %d records (%.4f%%) with duration > %d s "
-        "(or missing timestamps).",
-        n_cutoff_removed,
-        n_before_cutoff,
-        100 * n_cutoff_removed / n_before_cutoff if n_before_cutoff else 0.0,
-        cutoff_seconds,
-    )
-
-    # Compute SPM (steps Per Minute)
-    df["duration"] = (
-        (df["timestamp_end"] - df["timestamp_start"])
+    # Rows each record will create in the 1-second expansion, using the same
+    # filters as aggregate_hr_daily (numeric, inside hr_range, duration > 0).
+    hr_value = pd.to_numeric(hr["float_value"], errors="coerce")
+    record_seconds = (
+        (hr["timestamp_end"] - hr["timestamp_start"])
         .dt.total_seconds()
         .fillna(0)
-        .astype(int)
+        .astype("int64")
     )
-    df["SPM"] = df["steps"] / (df["duration"] / 60)
+    kept = hr_value.between(hr_min, hr_max) & (record_seconds > 0)
 
-    # NEW: log how many SPM values were non-finite (zero/NaN duration) and set to 0
-    n_invalid_spm = int((~np.isfinite(df["SPM"])).sum())
+    if max_record_seconds is not None:
+        too_long = kept & (record_seconds > max_record_seconds)
+        n_kept = int(kept.sum())
+        n_too_long = int(too_long.sum())
+        logging.info(
+            "HR: dropping %d of %d valid records (%.4f%%) longer than %d s "
+            "(%s one-second rows).",
+            n_too_long,
+            n_kept,
+            100 * n_too_long / n_kept if n_kept else 0.0,
+            max_record_seconds,
+            f"{int(record_seconds[too_long].sum()):,}",
+        )
+        hr = hr.loc[~too_long]
+        record_seconds = record_seconds.loc[~too_long]
+        kept = kept.loc[~too_long]
+
+    kept_seconds = record_seconds.where(kept, 0)
+    seconds_per_id = kept_seconds.groupby(hr["id"], observed=True).sum()
+    seconds_per_id = seconds_per_id[seconds_per_id > 0]
+    longest_record = int(kept_seconds.max()) if len(kept_seconds) else 0
+    del hr_value, record_seconds, kept, kept_seconds
+
+    if seconds_per_id.empty:
+        # Nothing to expand: a single call is cheap and returns the same
+        # (empty) result as the unbatched function.
+        return aggregate_hr_daily(
+            hr, df_sleep_sessions=df_sleep_sessions, hr_range=hr_range, **kwargs
+        )
+
+    # Pack participants, in id order, into batches below the row budget.
+    batches = []
+    batch_ids, batch_seconds = [], 0
+    for participant_id, n_seconds in seconds_per_id.items():
+        if batch_ids and batch_seconds + n_seconds > max_seconds_per_batch:
+            batches.append((batch_ids, batch_seconds))
+            batch_ids, batch_seconds = [], 0
+        batch_ids.append(participant_id)
+        batch_seconds += int(n_seconds)
+    batches.append((batch_ids, batch_seconds))
+
     logging.info(
-        "Steps: %d of %d records (%.4f%%) had non-finite SPM "
-        "(zero or missing duration); SPM set to 0 for these records.",
-        n_invalid_spm,
-        len(df),
-        100 * n_invalid_spm / len(df) if len(df) else 0.0,
+        "HR: %d participants, %s one-second rows after expansion "
+        "(largest participant %s rows, longest record %s s); "
+        "processing in %d batches of <= %s rows.",
+        len(seconds_per_id),
+        f"{int(seconds_per_id.sum()):,}",
+        f"{int(seconds_per_id.max()):,}",
+        f"{longest_record:,}",
+        len(batches),
+        f"{max_seconds_per_batch:,}",
     )
-    df["SPM"] = df["SPM"].replace([np.inf, -np.inf], np.nan).fillna(0)
 
-    # Expand to 1-minute resolution
-    df["timestamp_start_minute"] = df["timestamp_start"].dt.round("min")
-    df["duration_minutes"] = np.maximum(1, (df["duration"] / 60).round(0).astype(int))
-
-    df_expanded = df.loc[df.index.repeat(df["duration_minutes"])].copy()
-    df_expanded["time_offset"] = df_expanded.groupby(level=0).cumcount()
-    df_expanded["timestamp"] = df_expanded["timestamp_start_minute"] + pd.to_timedelta(
-        df_expanded["time_offset"], unit="min"
-    )
-    df_expanded["local_timestamp"] = df_expanded["local_timestamp_start"].dt.round(
-        "min"
-    ) + pd.to_timedelta(df_expanded["time_offset"], unit="min")
-
-    # Deduplicate overlapping entries via mean
-    df_avg = (
-        df_expanded.groupby(["id", "timestamp"], observed=True)
-        .agg(
-            for_id=("for_id", "first"),
-            SPM=("SPM", "mean"),
-            local_timestamp=("local_timestamp", "first"),
+    oversized = seconds_per_id[seconds_per_id > max_seconds_per_batch]
+    if not oversized.empty:
+        logging.warning(
+            "HR: %d participant(s) exceed max_seconds_per_batch on their own "
+            "(largest: %s with %s rows) and are processed alone.",
+            len(oversized),
+            oversized.idxmax(),
+            f"{int(oversized.max()):,}",
         )
-        .reset_index()
-    )
 
-    # Add time features
-    df_avg["local_day"] = df_avg["local_timestamp"].dt.floor("D")
-    df_avg["local_hour"] = df_avg["local_timestamp"].dt.floor("h")
-    df_avg["isnighttime"] = df_avg["local_timestamp"].dt.hour < nighttime_hour
+    row_positions = hr.groupby("id", observed=True, sort=False).indices
 
-    # Daily aggregation
-    df_steps_daily = (
-        df_avg.groupby(["id", "local_day"], observed=True)
-        .agg(
-            for_id=("for_id", "first"),
-            steps_in_day=("SPM", "sum"),
-            SPM_max=("SPM", "max"),
-            SPM_count=("SPM", "count"),
-            SPM_mean=("SPM", "mean"),
-            SPM_std=("SPM", "std"),
-            SPM_skew=("SPM", "skew"),
-            SPM_kurtosis=("SPM", lambda x: x.kurtosis()),
-            SPM_25pct=("SPM", lambda x: x.quantile(0.25)),
-            SPM_50pct=("SPM", lambda x: x.quantile(0.50)),
-            SPM_75pct=("SPM", lambda x: x.quantile(0.75)),
-            steps_night_sum=(
-                "SPM",
-                lambda x: x[df_avg.loc[x.index, "isnighttime"]].sum(),
-            ),
-            steps_night_mean=(
-                "SPM",
-                lambda x: x[df_avg.loc[x.index, "isnighttime"]].mean(),
-            ),
+    results = []
+    for batch_number, (ids, n_seconds) in enumerate(batches, start=1):
+        logging.info(
+            "HR batch %d/%d: %d participants, %s one-second rows.",
+            batch_number,
+            len(batches),
+            len(ids),
+            f"{n_seconds:,}",
         )
-        .reset_index()
-    )
-    df_steps_daily["steps_night_mean"] = df_steps_daily["steps_night_mean"].fillna(0)
 
-    # Hourly aggregation (intermediate step)
-    df_hourly = (
-        df_avg.groupby(["id", "local_hour"], observed=True)
-        .agg(
-            local_day=("local_day", "first"),
-            steps_inhour=("SPM", "sum"),
-            SPM_max_inhour=("SPM", "max"),
-            SPM_mean_inhour=("SPM", "mean"),
-            SPM_std_inhour=("SPM", "std"),
-            SPM_skew_inhour=("SPM", "skew"),
-            SPM_kurtosis_inhour=("SPM", lambda x: x.kurtosis()),
+        # Keep the original row order: for overlapping records,
+        # aggregate_hr_daily takes the local timestamp with "first".
+        rows = np.sort(
+            np.concatenate([row_positions[participant_id] for participant_id in ids])
         )
-        .reset_index()
-    )
-    df_hourly["clock_hour"] = df_hourly["local_hour"].dt.hour
 
-    # Merge hourly stats into daily
-    hourly_agg = (
-        df_hourly.groupby(["id", "local_day"], observed=True)
-        .agg(
-            steps_hours_with_records=("local_hour", "count"),
-            steps_per_hour=("steps_inhour", "mean"),
-            SPM_max_avgbyhour=("SPM_max_inhour", "mean"),
-            SPM_mean_avgbyhour=("SPM_mean_inhour", "mean"),
-            SPM_std_avgbyhour=("SPM_std_inhour", "mean"),
-            SPM_skew_avgbyhour=("SPM_skew_inhour", "mean"),
-            SPM_kurtosis_avgbyhour=("SPM_kurtosis_inhour", "mean"),
-        )
-        .reset_index()
-    )
+        with warnings.catch_warnings():
+            # A batch without any sleep-HR rows goes through the empty
+            # placeholder frames in aggregate_hr_daily, whose
+            # .fillna(0).astype(int) emits a harmless pandas downcasting
+            # FutureWarning. The resulting values are unaffected.
+            warnings.filterwarnings(
+                "ignore",
+                message="Downcasting object dtype arrays",
+                category=FutureWarning,
+            )
+            part = aggregate_hr_daily(
+                hr.iloc[rows],
+                df_sleep_sessions=df_sleep_sessions,
+                hr_range=hr_range,
+                **kwargs,
+            )
 
-    df_steps_daily = df_steps_daily.merge(
-        hourly_agg, on=["id", "local_day"], how="left"
-    )
+        # Those placeholder frames also leave object-dtype columns;
+        # restore numeric dtypes before concatenating.
+        results.append(part.infer_objects())
+        del part
+        gc.collect()
 
-    # Coverage is the share of day-hours with at least one steps record.
-    df_steps_daily["steps_coverage"] = df_steps_daily["steps_hours_with_records"] / 24
-
-    # Most active hour
-    most_active = df_hourly.loc[
-        df_hourly.groupby(["id", "local_day"], observed=True)["steps_inhour"].idxmax()
-    ][
-        [
-            "id",
-            "local_day",
-            "steps_inhour",
-            "clock_hour",
-            "SPM_max_inhour",
-            "SPM_mean_inhour",
-        ]
-    ].rename(
-        columns={
-            "steps_inhour": "steps_in_most_active_hour",
-            "clock_hour": "most_active_hour",
-            "SPM_max_inhour": "max_spm_in_most_active_hour",
-            "SPM_mean_inhour": "avg_spm_in_most_active_hour",
-        }
-    )
-    df_steps_daily = df_steps_daily.merge(
-        most_active, on=["id", "local_day"], how="left"
-    )
-
-    # Percentile hours (when 25%, 50%, 75% of daily steps are reached)
-    df_hourly["steps_inhour_cumsum"] = df_hourly.groupby(
-        ["id", "local_day"], observed=True
-    )["steps_inhour"].cumsum()
-
-    def percentile_hours(group, percentiles=(0.25, 0.5, 0.75)):
-        total_steps = group["steps_inhour_cumsum"].iloc[-1]
-        result = {}
-        for p in percentiles:
-            if total_steps > 0:
-                idx = group["steps_inhour_cumsum"].searchsorted(p * total_steps)
-                idx = min(idx, len(group) - 1)
-                result[f"hour_reach_{int(p * 100)}pct_steps_cumsum"] = group.iloc[idx][
-                    "local_hour"
-                ].hour
-            else:
-                result[f"hour_reach_{int(p * 100)}pct_steps_cumsum"] = np.nan
-        return pd.Series(result)
-
-    pct_hours = (
-        df_hourly.groupby(["id", "local_day"], observed=True)
-        .apply(percentile_hours, include_groups=False)
-        .reset_index()
-    )
-    df_steps_daily = df_steps_daily.merge(pct_hours, on=["id", "local_day"], how="left")
-
-    return df_steps_daily
+    return pd.concat(results, ignore_index=True)
 
 
 
@@ -2425,7 +2383,7 @@ def aggregate_all_passive(df_backup, **kwargs):
     )
 
     logging.info("Aggregating heart rate data...")
-    df_hr = aggregate_hr_daily(
+    df_hr = aggregate_hr_daily_batched(
         df_backup,
         zone_thresholds=kwargs.get("hr_zone_thresholds", (60, 100)),
         df_sleep_sessions=df_sleep_sessions,

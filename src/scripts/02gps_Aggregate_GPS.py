@@ -7,23 +7,31 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.18.1
+#       jupytext_version: 1.19.5
 #   kernelspec:
-#     display_name: tiki13
+#     display_name: py39-env
 #     language: python
 #     name: python3
 # ---
 
 # %% [markdown]
 # # Aggregate GPS data
+#
+# Pipeline:
+# 1. Load passive data, build one row per GPS fix (Latitude/Longitude).
+# 2. Coverage metrics per participant-day (on raw timestamps; coordinates not needed).
+# 3. Undo the app's coordinate anonymisation (additive lat/lon offset, latitude wraps at +-90)
+#    per key period -> consistent geometry for all participants.
+# 4. Clustering (weighted DBSCAN) + home detection per participant-key unit.
+# 5. Daily metrics, merged back to one row per participant-day.
 
-# %%
 # %%
 from pyprojroot import here
 import sys
 sys.path.insert(0, str(here()))
 
 import os
+import gc
 from pathlib import Path
 import logging
 import pandas as pd
@@ -34,11 +42,21 @@ import matplotlib.pyplot as plt
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
-import pickle
 from server_config import base_path
 
 import argparse
 from src.preprocessing import gps_features
+
+# %% [markdown]
+# ## Parameters
+
+# %%
+# Reference point for re-centring the anonymised coordinates (centre of the study region).
+# Only latitude matters for the distance scale; use ~ (51.2, 10.4) if participants come from all over Germany.
+REF_LAT, REF_LON = 52.52, 13.40
+
+# Restrict to each participant's first year of GPS data
+MAX_DAYS_PER_PARTICIPANT = 365
 
 # %% [markdown]
 # ## Load Data
@@ -63,25 +81,11 @@ if debug:
     print(f"Selected participants for debugging: {selected_participants}")
     print(f"Data shape after filtering for debug: {df_backup.shape}")
 else:
-    dbscan_crash_participants = ["UiPj"]
-    df_backup = df_backup[~df_backup["id"].isin(dbscan_crash_participants)].copy()
-    print("Processing all participants except dbscan crash participants")
-    print(f"Discarded participants: {dbscan_crash_participants}")
-
+    # DBSCAN memory issue is fixed (grid de-duplication), so no participants need to be excluded.
+    print("Processing all participants")
 
 # %% [markdown]
 # ## GPS
-
-# %%
-# #TODO remove this once we have the new file with local_timestamp_start
-# if "local_timestamp_start" not in df_backup.columns:
-#     df_backup["local_timestamp_start"] = df_backup["timestamp_start"].dt.tz_convert("Europe/Berlin")
-#     print("!"*70)
-#     print("local_timestamp_start column created from timestamp_start with timezone conversion to Europe/Berlin")
-#     print("!"*70)
-
-# %%
-df_backup.id.unique()
 
 # %%
 df_gps_raw = df_backup[df_backup["modality"].isin(["Latitude", "Longitude"])].copy()
@@ -113,43 +117,28 @@ df_loc_all = df_loc_all.dropna(
 df_loc_all["local_day"] = df_loc_all["local_timestamp_start"].dt.floor("d")
 df_loc_all["local_hour"] = df_loc_all["local_timestamp_start"].dt.hour
 
+# free memory: the full passive backup is no longer needed
+del df_backup, df_gps_raw, lat, lon
+gc.collect()
 
 # %%
-# # Restrict to each participant's first two weeks of GPS data
-# first_obs_per_customer = df_loc_all.groupby("id", observed=True)["local_timestamp_start"].transform("min")
-# df_loc = df_loc_all[
-#     df_loc_all["local_timestamp_start"] < (first_obs_per_customer + pd.Timedelta(days=30))
-# ].copy()
-
-# # Restrict to each participant's first year for now
+# Restrict to each participant's first year of GPS data
 first_obs_per_customer = df_loc_all.groupby("id", observed=True)[
     "local_timestamp_start"
 ].transform("min")
 df_loc = df_loc_all[
     df_loc_all["local_timestamp_start"]
-    < (first_obs_per_customer + pd.Timedelta(days=365))
+    < (first_obs_per_customer + pd.Timedelta(days=MAX_DAYS_PER_PARTICIPANT))
 ].copy()
 
+del df_loc_all, first_obs_per_customer
+gc.collect()
 
-# df_loc = df_loc_all.copy()
-# df_loc
-# %% [markdown]
-# #### calculate the time to next sample
-
-# %%
 df_loc = df_loc.sort_values(by=["id", "timestamp_start"])
-df_loc["time_to_next_sample"] = (
-    df_loc.groupby("id", observed=True)["timestamp_start"].shift(-1)
-    - df_loc["timestamp_start"]
-).dt.total_seconds()
 print(df_loc.shape)
-df_loc.tail()
 
-# %%
-# clip
-df_loc["time_to_next_clipped"] = df_loc["time_to_next_sample"].clip(upper=12 * 3600)
-
-
+# %% [markdown]
+# ### Coverage metrics per participant-day
 
 # %%
 gps_raw_points = (
@@ -175,29 +164,17 @@ gps_hourly_summary = (
     .reset_index()
 )
 
-
-def _gap_stats(group: pd.DataFrame) -> pd.Series:
-    # times = group["local_timestamp_start"].sort_values()
-    times = group["timestamp_start"].sort_values()
-    if len(times) < 2:
-        return pd.Series(
-            {
-                "GPS_max_gap_seconds": np.nan,
-                "GPS_mean_gap_seconds": np.nan,
-            }
-        )
-    gaps = times.diff().dt.total_seconds().dropna()
-    return pd.Series(
-        {
-            "GPS_max_gap_seconds": gaps.max(),
-            "GPS_mean_gap_seconds": gaps.mean(),
-        }
-    )
-
-
-gps_gap_stats = (
-    df_loc.groupby(["id", "local_day"], observed=True).apply(_gap_stats).reset_index()
+# gap statistics per participant-day (vectorized)
+_gap = df_loc[["id", "local_day", "timestamp_start"]].copy()
+_gap["gap_s"] = (
+    _gap.groupby(["id", "local_day"], observed=True)["timestamp_start"].diff().dt.total_seconds()
 )
+gps_gap_stats = (
+    _gap.groupby(["id", "local_day"], observed=True)["gap_s"]
+    .agg(GPS_max_gap_seconds="max", GPS_mean_gap_seconds="mean")
+    .reset_index()
+)
+del _gap
 
 df_gps_coverage = gps_raw_points.merge(
     gps_hourly_summary, on=["id", "local_day"], how="outer"
@@ -207,64 +184,54 @@ df_gps_coverage["GPS_coverage_pct"] = (
     df_gps_coverage["GPS_hours_with_data"] / 24.0 * 100.0
 )
 
-# %%
-df_gps_coverage
-
-# %%
 logging.info("GPS coverage metrics calculated and merged into df_gps_coverage")
 print(df_gps_coverage.shape)
 df_gps_coverage.head()
-# logging.info(f"GPS coverage metrics calculated for {df_gps_coverage['customer'].nunique()} customers and {len(df_gps_coverage)} customer-days")
-# %%
-df_loc.head()
-
-# %%
-df_loc.groupby("id", observed=True).size().sort_values(ascending=False)
-
-# %%
-df_loc
 
 # %% [markdown]
-# ### gps_features cluster & home extract
+# ### Undo coordinate anonymisation
+#
+# The app adds a random offset to latitude (wrapping at +-90) and longitude per key period.
+# A latitude offset distorts east-west distances by cos(lat_obfuscated), so we split each
+# participant into key units and re-centre each unit on (REF_LAT, REF_LON).
+# After this, ids are '<id>_k<key>' and 'id_orig' holds the original id.
+
+# %%
+df_loc = gps_features.normalize_shifted_coords(df_loc, ref_lat=REF_LAT, ref_lon=REF_LON)
+
+# remove GPS glitches: points reached AND left faster than an airliner (e.g. single garbage fixes)
+df_loc = gps_features.remove_impossible_excursions(df_loc, max_speed_kmh=1000)
+
+n_units, n_people = df_loc["id"].nunique(), df_loc["id_orig"].nunique()
+print(f"{n_people} participants in {n_units} key units")
+
+# %% [markdown]
+# ### Clustering & home detection
 
 # %%
 home_extractor = gps_features.HomeClusterExtractor(
     df_loc,
     speed_limit=1.4,
     max_distance=150,
-    epsilon=100,  # Müller uses 30
-    min_samples=10,  # Müller uses 3 but we have more data
+    epsilon=100,  # metres; Müller uses 30
+    min_samples=600,  # weighted: >= 10 min cumulative dwell time within epsilon
     min_nights_obs=4,
     min_f_home=0.5,
     clustering_method="dbscan",
     normalize_min_samples=False,
     min_data_points=50,
-    # n_jobs=64,
     n_jobs=16,
-    # new_cluster_labeling=True,  # ensures cluster labels are consistent across days for the same participant
     use_weights=True,
     home_v2=True,
+    min_f_secondary_home=0.15,  # second home: >= 15 % of night time on >= min_nights_obs nights
+    home_merge_m=500,  # split home: clusters within 500 m of the primary home
 )
 
 geodata_clusters = home_extractor.run()
 logging.info("Home cluster extraction completed")
 
-df_gps_metrics = gps_features.calculate_metrics(
-    geodata_clusters, group_by=["id", "local_day"]
-)
-logging.info("GPS metrics calculated and stored in df_gps_metrics")
-
-df_gps_daily = df_gps_metrics
-
-print(f"GPS daily rows: {len(df_gps_daily)}")
-print(f"GPS daily columns: {len(df_gps_daily.columns)}")
-print(f"Unique customers: {df_gps_daily['id'].nunique()}")
-print(
-    f"Date range: {df_gps_daily['local_day'].min()} to {df_gps_daily['local_day'].max()}"
-)
-df_gps_daily.head()
-
 # %%
+# sanity checks on the extractor output
 assert np.all(
     (home_extractor.df["transition"] == 1) | (home_extractor.df["stationary"])
 )
@@ -272,11 +239,124 @@ assert not np.any(
     (home_extractor.df["transition"] == 1) & (home_extractor.df["stationary"])
 )
 
+# %% [markdown]
+# ### Daily metrics
+
+# %%
+df_gps_metrics = gps_features.calculate_metrics_fast(
+    geodata_clusters, group_by=["id", "local_day"]
+)
+logging.info("GPS metrics calculated and stored in df_gps_metrics")
+
+# Back from participant-key units to one row per participant-day.
+# On days where the key switches, keep the unit with the longer active period.
+m = df_gps_metrics.copy()
+m["id_key"] = m["id"]
+m["id"] = m["id_key"].str.rsplit("_k", n=1).str[0]
+m["key_switch_day"] = m.groupby(["id", "local_day"])["id_key"].transform("size") > 1
+df_gps_daily = (m.sort_values("active_period_hours", ascending=False)
+                 .drop_duplicates(["id", "local_day"])
+                 .sort_values(["id", "local_day"])
+                 .reset_index(drop=True))
+del m
+
+print(f"GPS daily rows: {len(df_gps_daily)}")
+print(f"GPS daily columns: {len(df_gps_daily.columns)}")
+print(f"Unique participants: {df_gps_daily['id'].nunique()}")
+print(
+    f"Date range: {df_gps_daily['local_day'].min()} to {df_gps_daily['local_day'].max()}"
+)
+df_gps_daily.head()
+
+# %% [markdown]
+# ## Quality checks
+
+# %%
+# 1) Geometry: after normalisation the E-W / N-S step ratio should be ~1 for all units
+#    The level is data-specific (here ~0.5-0.6 already before correction); what matters is that it
+#    no longer depends on the anonymised latitude of the unit (Spearman rho ~ 0).
+d = geodata_clusters[["id", "timestamp_start", "Latitude", "Longitude"]].sort_values(["id", "timestamp_start"])
+g = d.groupby("id")
+step = gps_features.haversine(d["Longitude"], d["Latitude"], g["Longitude"].shift(-1), g["Latitude"].shift(-1))
+dns = (g["Latitude"].shift(-1) - d["Latitude"]).abs() * 111_320
+dew = (g["Longitude"].shift(-1) - d["Longitude"]).abs() * 111_320 * np.cos(np.radians(d["Latitude"]))
+s = pd.DataFrame({"id": d["id"], "dns": dns, "dew": dew})[step.between(20, 2000)]
+iso = s.groupby("id").agg(ns=("dns", "median"), ew=("dew", "median"))
+iso["ew_ns"] = iso["ew"] / iso["ns"]
+iso["abs_lat_obf"] = df_loc.groupby("id")["lat_obf_center"].first().abs()
+print("E-W / N-S step ratio per unit:")
+print(iso["ew_ns"].describe())
+print("Spearman rho with |anonymised latitude| (should be ~0):",
+      round(iso[["ew_ns", "abs_lat_obf"]].corr(method="spearman").iloc[0, 1], 3))
+plt.scatter(iso["abs_lat_obf"], iso["ew_ns"], s=8)
+plt.yscale("log"); plt.xlabel("|anonymised latitude| of unit"); plt.ylabel("E-W / N-S (corrected)")
+plt.title("Should be flat"); plt.show()
+del d, g, step, dns, dew, s, iso
+
+# %%
+# 2) Distances: maximum should be a plausible travel day (metres)
+print(df_gps_daily["total_distance"].describe(percentiles=[.5, .95, .99, .999]))
+df_gps_daily.nlargest(10, "total_distance")[["id", "local_day", "total_distance", "key_switch_day"]]
+
+# %%
+# 3) Home coverage: share of each participant's days with a time-at-home value
+cov = (df_gps_daily.groupby("id")["percentage_time_at_home"]
+       .apply(lambda s: s.notna().mean())
+       .sort_values())
+print(cov.describe())
+print(f"{(cov == 0).sum()} participants without any home days, "
+      f"{(cov < 0.8).sum()} with <80% of days covered")
+cov.head(30)
+
+# %%
+# 4) Units without a home: the two clusters with most night time
+diag = home_extractor.home_diagnostics
+no_home = geodata_clusters.groupby("id", observed=True)["home"].first()
+fail = no_home[no_home.isna()].index
+
+top2 = (diag[diag["id"].isin(fail)]
+        .sort_values(["id", "night_sec"], ascending=[True, False])
+        .groupby("id", observed=True).head(2))
+
+cent = (geodata_clusters[geodata_clusters["cluster"] != -1]
+        .groupby(["id", "cluster"], observed=True)
+        .agg(lat=("Latitude", "mean"), lon=("Longitude", "mean"),
+             first=("local_timestamp_start", "min"), last=("local_timestamp_start", "max"))
+        .reset_index())
+top2 = top2.drop(columns=["x", "y", "z", "px", "py", "pz"], errors="ignore").merge(
+    cent, on=["id", "cluster"], how="left")
+
+rows = []
+for pid, grp in top2.groupby("id", observed=True):
+    a = grp.iloc[0]
+    b = grp.iloc[1] if len(grp) > 1 else None
+    rows.append({
+        "id": pid,
+        "n_nights1": a["n_nights"],
+        "f1": a["f_home"],
+        "f2": b["f_home"] if b is not None else np.nan,
+        "f1+f2": a["f_home"] + b["f_home"] if b is not None else np.nan,
+        "dist_m": gps_features.haversine(a["lon"], a["lat"], b["lon"], b["lat"]) if b is not None else np.nan,
+        "c1_period": f'{a["first"]:%Y-%m-%d} – {a["last"]:%Y-%m-%d}',
+        "c2_period": f'{b["first"]:%Y-%m-%d} – {b["last"]:%Y-%m-%d}' if b is not None else "",
+    })
+
+if rows:
+    summary = pd.DataFrame(rows).set_index("id").sort_values("f1", ascending=False)
+    pd.set_option("display.width", 200)
+    print(summary.round(2).to_string())
+print(f"\n{len(rows)} units without home but with a primary night cluster (>= min_nights_obs); "
+      f"{len(fail) - len(rows)} units with too few nights or no clustered night time")
+
+# %% [markdown]
+# ## Save
+
 # %%
 # save the aggregated daily data
 if debug:
     print("!!!!!!!!!!!!!DEBUG MODE ON: Saving locally inside the repository!!!!!!!!!!!!!")
     output_dir = here() / "tmp"
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "temp_gps_daily_metrics_debug.feather"
 else:
     passive_daily_dir = base_path / "preprocessed" / "passive" / "daily"
@@ -284,23 +364,3 @@ else:
 
 df_gps_daily.to_feather(output_path)
 print(f"GPS daily metrics saved to: {output_path}")
-
-# %% [markdown]
-# ## Summary Visualizations
-
-# %%
-# Plot non-null counts of each key metric in df_gps_daily
-key_metrics = [
-    "total_distance_km", "n_unique_places", "at_home_minute", "entropy"
-]
-available_metrics = [m for m in key_metrics if m in df_gps_daily.columns]
-if available_metrics:
-    plt.figure(figsize=(10, 5))
-    df_gps_daily[available_metrics].notna().sum().plot(kind="bar", color="#2ecc71", edgecolor="black")
-    plt.title("Number of Day-Records containing each GPS Metric")
-    plt.ylabel("Non-Null Count")
-    plt.xlabel("GPS Metric")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
